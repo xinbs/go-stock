@@ -670,18 +670,6 @@ onMounted(() => {
       <n-notification-provider>
         <n-modal-provider>
           <n-dialog-provider>
-            <n-watermark
-                :content="content"
-                cross
-                selectable
-                :font-size="16"
-                :line-height="16"
-                :width="500"
-                :height="400"
-                :x-offset="50"
-                :y-offset="150"
-                :rotate="-15"
-            >
               <n-flex>
                 <n-grid x-gap="12" :cols="1">
                   <n-gi>
@@ -713,7 +701,6 @@ onMounted(() => {
                   </n-gi>
                 </n-grid>
               </n-flex>
-            </n-watermark>
           </n-dialog-provider>
         </n-modal-provider>
       </n-notification-provider>
