@@ -47,6 +47,7 @@ const formValue = ref({
   enableFund:false,
   enablePushNews:false,
   sponsorCode:"",
+  checkUpdate:true,
 })
 const promptTemplates=ref([])
 onMounted(()=>{
@@ -82,6 +83,7 @@ onMounted(()=>{
     formValue.value.enableFund = res.enableFund
     formValue.value.enablePushNews = res.enablePushNews
     formValue.value.sponsorCode = res.sponsorCode
+    formValue.value.checkUpdate = res.checkUpdate !== undefined ? res.checkUpdate : true
 
 
     //console.log(res)
@@ -124,7 +126,8 @@ function saveConfig(){
     darkTheme:formValue.value.darkTheme,
     enableFund:formValue.value.enableFund,
     enablePushNews:formValue.value.enablePushNews,
-    sponsorCode:formValue.value.sponsorCode
+    sponsorCode:formValue.value.sponsorCode,
+    checkUpdate:formValue.value.checkUpdate
   })
 
   if (config.sponsorCode){
@@ -216,6 +219,7 @@ function importConfig(){
       formValue.value.enableFund = config.enableFund
       formValue.value.enablePushNews = config.enablePushNews
       formValue.value.sponsorCode = config.sponsorCode
+      formValue.value.checkUpdate = config.checkUpdate !== undefined ? config.checkUpdate : true
      // formRef.value.resetFields()
     };
     reader.readAsText(file);
@@ -306,6 +310,9 @@ function deletePrompt(ID){
         </n-form-item-gi>
         <n-form-item-gi  :span="6" label="暗黑主题：" path="darkTheme" >
           <n-switch v-model:value="formValue.darkTheme" />
+        </n-form-item-gi>
+        <n-form-item-gi  :span="4" label="自动检查更新：" path="checkUpdate" >
+          <n-switch v-model:value="formValue.checkUpdate" />
         </n-form-item-gi>
         <n-form-item-gi  :span="10" label="浏览器安装路径：" path="browserPath" >
           <n-input  type="text" placeholder="浏览器安装路径"  v-model:value="formValue.browserPath" clearable />

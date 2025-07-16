@@ -145,7 +145,14 @@ func (a *App) CheckSponsorCode(sponsorCode string) map[string]any {
 }
 
 func (a *App) CheckUpdate() {
-	sponsorCode := strutil.Trim(a.GetConfig().SponsorCode)
+	// 检查是否启用自动更新
+	config := a.GetConfig()
+	if !config.CheckUpdate {
+		logger.SugaredLogger.Info("自动更新已禁用")
+		return
+	}
+	
+	sponsorCode := strutil.Trim(config.SponsorCode)
 	if sponsorCode != "" {
 		encrypted, err := hex.DecodeString(sponsorCode)
 		if err != nil {
