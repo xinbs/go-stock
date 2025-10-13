@@ -20,8 +20,8 @@ type BrowserPool struct {
 func NewBrowserPool(size int) *BrowserPool {
 	pool := make(chan *context.Context, size)
 	for i := 0; i < size; i++ {
-		path := GetConfig().BrowserPath
-		crawlTimeOut := GetConfig().CrawlTimeOut
+		path := GetSettingConfig().BrowserPath
+		crawlTimeOut := GetSettingConfig().CrawlTimeOut
 		if crawlTimeOut < 15 {
 			crawlTimeOut = 30
 		}

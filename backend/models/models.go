@@ -1,9 +1,10 @@
 package models
 
 import (
+	"time"
+
 	"gorm.io/gorm"
 	"gorm.io/plugin/soft_delete"
-	"time"
 )
 
 // @Author spark
@@ -172,6 +173,8 @@ type StockInfoHK struct {
 	FullName string                `json:"fullName"`
 	EName    string                `json:"eName"`
 	IsDel    soft_delete.DeletedAt `gorm:"softDelete:flag"`
+	BKName   string                `json:"bk_name"`
+	BKCode   string                `json:"bk_code"`
 }
 
 func (receiver StockInfoHK) TableName() string {
@@ -187,6 +190,8 @@ type StockInfoUS struct {
 	Exchange string                `json:"exchange"`
 	Type     string                `json:"type"`
 	IsDel    soft_delete.DeletedAt `gorm:"softDelete:flag"`
+	BKName   string                `json:"bk_name"`
+	BKCode   string                `json:"bk_code"`
 }
 
 func (receiver StockInfoUS) TableName() string {
@@ -460,4 +465,239 @@ type PPIResp struct {
 type PMIResp struct {
 	DCResp
 	PMIResult PMIResult `json:"result"`
+}
+
+type OldSettings struct {
+	gorm.Model
+	TushareToken           string `json:"tushareToken"`
+	LocalPushEnable        bool   `json:"localPushEnable"`
+	DingPushEnable         bool   `json:"dingPushEnable"`
+	DingRobot              string `json:"dingRobot"`
+	UpdateBasicInfoOnStart bool   `json:"updateBasicInfoOnStart"`
+	RefreshInterval        int64  `json:"refreshInterval"`
+
+	OpenAiEnable      bool    `json:"openAiEnable"`
+	OpenAiBaseUrl     string  `json:"openAiBaseUrl"`
+	OpenAiApiKey      string  `json:"openAiApiKey"`
+	OpenAiModelName   string  `json:"openAiModelName"`
+	OpenAiMaxTokens   int     `json:"openAiMaxTokens"`
+	OpenAiTemperature float64 `json:"openAiTemperature"`
+	OpenAiApiTimeOut  int     `json:"openAiApiTimeOut"`
+	Prompt            string  `json:"prompt"`
+	CheckUpdate       bool    `json:"checkUpdate"`
+	QuestionTemplate  string  `json:"questionTemplate"`
+	CrawlTimeOut      int64   `json:"crawlTimeOut"`
+	KDays             int64   `json:"kDays"`
+	EnableDanmu       bool    `json:"enableDanmu"`
+	BrowserPath       string  `json:"browserPath"`
+	EnableNews        bool    `json:"enableNews"`
+	DarkTheme         bool    `json:"darkTheme"`
+	BrowserPoolSize   int     `json:"browserPoolSize"`
+	EnableFund        bool    `json:"enableFund"`
+	EnablePushNews    bool    `json:"enablePushNews"`
+	SponsorCode       string  `json:"sponsorCode"`
+}
+
+func (receiver OldSettings) TableName() string {
+	return "settings"
+}
+
+type ReutersNews struct {
+	StatusCode int    `json:"statusCode"`
+	Message    string `json:"message"`
+	Result     struct {
+		ParentSectionName string `json:"parent_section_name"`
+		Pagination        struct {
+			Size         int    `json:"size"`
+			ExpectedSize int    `json:"expected_size"`
+			TotalSize    int    `json:"total_size"`
+			Orderby      string `json:"orderby"`
+		} `json:"pagination"`
+		DateModified time.Time `json:"date_modified"`
+		FetchType    string    `json:"fetch_type"`
+		Articles     []struct {
+			Id                          string    `json:"id"`
+			CanonicalUrl                string    `json:"canonical_url"`
+			Website                     string    `json:"website"`
+			Web                         string    `json:"web"`
+			Native                      string    `json:"native"`
+			UpdatedTime                 time.Time `json:"updated_time"`
+			PublishedTime               time.Time `json:"published_time"`
+			ArticleType                 string    `json:"article_type"`
+			DisplayMyNews               bool      `json:"display_my_news"`
+			DisplayNewsletterSignup     bool      `json:"display_newsletter_signup"`
+			DisplayNotifications        bool      `json:"display_notifications"`
+			DisplayRelatedMedia         bool      `json:"display_related_media"`
+			DisplayRelatedOrganizations bool      `json:"display_related_organizations"`
+			ContentCode                 string    `json:"content_code"`
+			Source                      struct {
+				Name         string `json:"name"`
+				OriginalName string `json:"original_name"`
+			} `json:"source"`
+			Title            string `json:"title"`
+			BasicHeadline    string `json:"basic_headline"`
+			Distributor      string `json:"distributor"`
+			Description      string `json:"description"`
+			PrimaryMediaType string `json:"primary_media_type,omitempty"`
+			PrimaryTag       struct {
+				ShortBio    string `json:"short_bio"`
+				Description string `json:"description"`
+				Slug        string `json:"slug"`
+				Text        string `json:"text"`
+				TopicUrl    string `json:"topic_url"`
+				CanFollow   bool   `json:"can_follow,omitempty"`
+				IsTopic     bool   `json:"is_topic,omitempty"`
+			} `json:"primary_tag"`
+			WordCount   int `json:"word_count"`
+			ReadMinutes int `json:"read_minutes"`
+			Kicker      struct {
+				Path  string   `json:"path"`
+				Names []string `json:"names"`
+				Name  string   `json:"name,omitempty"`
+			} `json:"kicker"`
+			AdTopics  []string `json:"ad_topics"`
+			Thumbnail struct {
+				Url                   string    `json:"url"`
+				Caption               string    `json:"caption,omitempty"`
+				Type                  string    `json:"type"`
+				ResizerUrl            string    `json:"resizer_url"`
+				Location              string    `json:"location,omitempty"`
+				Id                    string    `json:"id"`
+				Authors               string    `json:"authors,omitempty"`
+				AltText               string    `json:"alt_text"`
+				Width                 int       `json:"width"`
+				Height                int       `json:"height"`
+				Subtitle              string    `json:"subtitle"`
+				Slug                  string    `json:"slug,omitempty"`
+				UpdatedAt             time.Time `json:"updated_at"`
+				Company               string    `json:"company,omitempty"`
+				PurchaseLicensingPath string    `json:"purchase_licensing_path,omitempty"`
+			} `json:"thumbnail"`
+			Authors []struct {
+				Id        string `json:"id,omitempty"`
+				Name      string `json:"name"`
+				FirstName string `json:"first_name,omitempty"`
+				LastName  string `json:"last_name,omitempty"`
+				Company   string `json:"company"`
+				Thumbnail struct {
+					Url        string `json:"url"`
+					Type       string `json:"type"`
+					ResizerUrl string `json:"resizer_url"`
+				} `json:"thumbnail"`
+				SocialLinks []struct {
+					Site string `json:"site"`
+					Url  string `json:"url"`
+				} `json:"social_links,omitempty"`
+				Byline      string `json:"byline"`
+				Description string `json:"description,omitempty"`
+				TopicUrl    string `json:"topic_url,omitempty"`
+				Role        string `json:"role,omitempty"`
+			} `json:"authors"`
+			DisplayTime   time.Time `json:"display_time"`
+			ThumbnailDark struct {
+				Url        string    `json:"url"`
+				Type       string    `json:"type"`
+				ResizerUrl string    `json:"resizer_url"`
+				Id         string    `json:"id"`
+				AltText    string    `json:"alt_text"`
+				Width      int       `json:"width"`
+				Height     int       `json:"height"`
+				Subtitle   string    `json:"subtitle"`
+				UpdatedAt  time.Time `json:"updated_at"`
+			} `json:"thumbnail_dark,omitempty"`
+		} `json:"articles"`
+		Section struct {
+			Id          string `json:"id"`
+			AdUnitCode  string `json:"ad_unit_code"`
+			Website     string `json:"website"`
+			Name        string `json:"name"`
+			PageTitle   string `json:"page_title"`
+			CanFollow   bool   `json:"can_follow"`
+			Language    string `json:"language"`
+			Type        string `json:"type"`
+			Advertising struct {
+				Sponsored string `json:"sponsored"`
+			} `json:"advertising"`
+			VideoPlaylistId  string `json:"video_playlistId"`
+			MobileAdUnitPath string `json:"mobile_ad_unit_path"`
+			AdUnitPath       string `json:"ad_unit_path"`
+			CollectionAlias  string `json:"collection_alias"`
+			SectionAbout     string `json:"section_about"`
+			Title            string `json:"title"`
+			Personalization  struct {
+				Id        string `json:"id"`
+				Type      string `json:"type"`
+				ShowTags  bool   `json:"show_tags"`
+				CanFollow bool   `json:"can_follow"`
+			} `json:"personalization"`
+		} `json:"section"`
+		AdUnitPath   string `json:"ad_unit_path"`
+		ResponseTime int64  `json:"response_time"`
+	} `json:"result"`
+	Id string `json:"_id"`
+}
+
+type InteractiveAnswer struct {
+	PageNo      int                        `json:"pageNo"`
+	PageSize    int                        `json:"pageSize"`
+	TotalRecord int                        `json:"totalRecord"`
+	TotalPage   int                        `json:"totalPage"`
+	Results     []InteractiveAnswerResults `json:"results"`
+	Count       bool                       `json:"count"`
+}
+
+type InteractiveAnswerResults struct {
+	EsId             string   `json:"esId" md:"-"`
+	IndexId          string   `json:"indexId" md:"-"`
+	ContentType      int      `json:"contentType" md:"-"`
+	Trade            []string `json:"trade"  md:"行业名称"`
+	MainContent      string   `json:"mainContent" md:"投资者提问"`
+	StockCode        string   `json:"stockCode" md:"股票代码"`
+	Secid            string   `json:"secid" md:"-"`
+	CompanyShortName string   `json:"companyShortName" md:"股票名称"`
+	CompanyLogo      string   `json:"companyLogo,omitempty" md:"-"`
+	BoardType        []string `json:"boardType" md:"-"`
+	PubDate          string   `json:"pubDate" md:"发布时间"`
+	UpdateDate       string   `json:"updateDate" md:"-"`
+	Author           string   `json:"author" md:"-"`
+	AuthorName       string   `json:"authorName" md:"-"`
+	PubClient        string   `json:"pubClient" md:"-"`
+	AttachedId       string   `json:"attachedId" md:"-"`
+	AttachedContent  string   `json:"attachedContent" md:"上市公司回复"`
+	AttachedAuthor   string   `json:"attachedAuthor" md:"-"`
+	AttachedPubDate  string   `json:"attachedPubDate" md:"回复时间"`
+	Score            float64  `json:"score" md:"-"`
+	TopStatus        int      `json:"topStatus" md:"-"`
+	PraiseCount      int      `json:"praiseCount" md:"-"`
+	PraiseStatus     bool     `json:"praiseStatus" md:"-"`
+	FavoriteStatus   bool     `json:"favoriteStatus" md:"-"`
+	AttentionCompany bool     `json:"attentionCompany" md:"-"`
+	IsCheck          string   `json:"isCheck" md:"-"`
+	QaStatus         int      `json:"qaStatus" md:"-"`
+	PackageDate      string   `json:"packageDate" md:"-"`
+	RemindStatus     bool     `json:"remindStatus" md:"-"`
+	InterviewLive    bool     `json:"interviewLive" md:"-"`
+}
+
+type CailianpressWeb struct {
+	Total int `json:"total"`
+	List  []struct {
+		Title   string `json:"title" md:"资讯标题"`
+		Ctime   int    `json:"ctime" md:"资讯时间"`
+		Content string `json:"content" md:"资讯内容"`
+		Author  string `json:"author" md:"资讯发布者"`
+	} `json:"list"`
+}
+
+type BKDict struct {
+	gorm.Model  `md:"-"`
+	BkCode      string `json:"bkCode" md:"行业/板块代码"`
+	BkName      string `json:"bkName" md:"行业/板块名称"`
+	FirstLetter string `json:"firstLetter" md:"first_letter"`
+	FubkCode    string `json:"fubkCode" md:"fubk_code"`
+	PublishCode string `json:"publishCode" md:"publish_code"`
+}
+
+func (b BKDict) TableName() string {
+	return "bk_dict"
 }

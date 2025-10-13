@@ -17,10 +17,10 @@ import (
 
 type TushareApi struct {
 	client *resty.Client
-	config *Settings
+	config *SettingConfig
 }
 
-func NewTushareApi(config *Settings) *TushareApi {
+func NewTushareApi(config *SettingConfig) *TushareApi {
 	return &TushareApi{
 		client: resty.New(),
 		config: config,

@@ -1,5 +1,55 @@
 export namespace data {
 	
+	export class AIConfig {
+	    ID: number;
+	    // Go type: time
+	    CreatedAt: any;
+	    // Go type: time
+	    UpdatedAt: any;
+	    name: string;
+	    baseUrl: string;
+	    apiKey: string;
+	    modelName: string;
+	    maxTokens: number;
+	    temperature: number;
+	    timeOut: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ID = source["ID"];
+	        this.CreatedAt = this.convertValues(source["CreatedAt"], null);
+	        this.UpdatedAt = this.convertValues(source["UpdatedAt"], null);
+	        this.name = source["name"];
+	        this.baseUrl = source["baseUrl"];
+	        this.apiKey = source["apiKey"];
+	        this.modelName = source["modelName"];
+	        this.maxTokens = source["maxTokens"];
+	        this.temperature = source["temperature"];
+	        this.timeOut = source["timeOut"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class FundBasic {
 	    ID: number;
 	    // Go type: time
@@ -246,6 +296,7 @@ export namespace data {
 	    Cron?: string;
 	    IsDel: number;
 	    Groups: GroupStock[];
+	    AiConfigId: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new FollowedStock(source);
@@ -267,6 +318,7 @@ export namespace data {
 	        this.Cron = source["Cron"];
 	        this.IsDel = source["IsDel"];
 	        this.Groups = this.convertValues(source["Groups"], GroupStock);
+	        this.AiConfigId = source["AiConfigId"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -310,7 +362,7 @@ export namespace data {
 	        this.Description = source["Description"];
 	    }
 	}
-	export class Settings {
+	export class SettingConfig {
 	    ID: number;
 	    // Go type: time
 	    CreatedAt: any;
@@ -325,12 +377,6 @@ export namespace data {
 	    updateBasicInfoOnStart: boolean;
 	    refreshInterval: number;
 	    openAiEnable: boolean;
-	    openAiBaseUrl: string;
-	    openAiApiKey: string;
-	    openAiModelName: string;
-	    openAiMaxTokens: number;
-	    openAiTemperature: number;
-	    openAiApiTimeOut: number;
 	    prompt: string;
 	    checkUpdate: boolean;
 	    questionTemplate: string;
@@ -343,10 +389,14 @@ export namespace data {
 	    browserPoolSize: number;
 	    enableFund: boolean;
 	    enablePushNews: boolean;
+	    enableOnlyPushRedNews: boolean;
 	    sponsorCode: string;
+	    httpProxy: string;
+	    httpProxyEnabled: boolean;
+	    aiConfigs: AIConfig[];
 	
 	    static createFrom(source: any = {}) {
-	        return new Settings(source);
+	        return new SettingConfig(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -362,12 +412,6 @@ export namespace data {
 	        this.updateBasicInfoOnStart = source["updateBasicInfoOnStart"];
 	        this.refreshInterval = source["refreshInterval"];
 	        this.openAiEnable = source["openAiEnable"];
-	        this.openAiBaseUrl = source["openAiBaseUrl"];
-	        this.openAiApiKey = source["openAiApiKey"];
-	        this.openAiModelName = source["openAiModelName"];
-	        this.openAiMaxTokens = source["openAiMaxTokens"];
-	        this.openAiTemperature = source["openAiTemperature"];
-	        this.openAiApiTimeOut = source["openAiApiTimeOut"];
 	        this.prompt = source["prompt"];
 	        this.checkUpdate = source["checkUpdate"];
 	        this.questionTemplate = source["questionTemplate"];
@@ -380,7 +424,11 @@ export namespace data {
 	        this.browserPoolSize = source["browserPoolSize"];
 	        this.enableFund = source["enableFund"];
 	        this.enablePushNews = source["enablePushNews"];
+	        this.enableOnlyPushRedNews = source["enableOnlyPushRedNews"];
 	        this.sponsorCode = source["sponsorCode"];
+	        this.httpProxy = source["httpProxy"];
+	        this.httpProxyEnabled = source["httpProxyEnabled"];
+	        this.aiConfigs = this.convertValues(source["aiConfigs"], AIConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -426,6 +474,8 @@ export namespace data {
 	    is_hs: string;
 	    act_name: string;
 	    act_ent_type: string;
+	    bk_name: string;
+	    bk_code: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new StockBasic(source);
@@ -454,6 +504,8 @@ export namespace data {
 	        this.is_hs = source["is_hs"];
 	        this.act_name = source["act_name"];
 	        this.act_ent_type = source["act_ent_type"];
+	        this.bk_name = source["bk_name"];
+	        this.bk_code = source["bk_code"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

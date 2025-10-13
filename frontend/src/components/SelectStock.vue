@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import {h, onBeforeMount, onMounted, onUnmounted, ref} from 'vue'
-import {SearchStock, GetHotStrategy, OpenURL} from "../../wailsjs/go/main/App";
+import {SearchStock, GetHotStrategy, OpenURL, Follow, GetFollowList} from "../../wailsjs/go/main/App";
 import {useMessage, NText, NTag, NButton} from 'naive-ui'
 import {Environment} from "../../wailsjs/runtime"
 import {RefreshCircleSharp} from "@vicons/ionicons5";
+import {EventsEmit} from "../../wailsjs/runtime";
 
 const message = useMessage()
 const search = ref('')
@@ -11,6 +12,32 @@ const columns = ref([])
 const dataList = ref([])
 const hotStrategy = ref([])
 const traceInfo = ref('')
+const tableScrollX = ref(2800) // 默认滚动宽度
+
+// 计算表格总宽度
+function calculateTableWidth(cols) {
+  let totalWidth = 0;
+  
+  cols.forEach(col => {
+    if (col.children && col.children.length > 0) {
+      // 有子列的情况
+      let childrenWidth = 0;
+      col.children.forEach(child => {
+        childrenWidth += child.width || child.minWidth || 100;
+      });
+      // 取标题列宽度和子列总宽度的较大值
+      totalWidth += Math.max(col.width || col.minWidth || 200, childrenWidth);
+    } else {
+      // 没有子列的情况
+      totalWidth += col.width || col.minWidth || 120;
+    }
+  });
+  
+  // 加上操作列的宽度
+  totalWidth += 100;
+  
+  return Math.max(totalWidth, 1200); // 最小宽度1200
+}
 
 function Search() {
   if (!search.value) {
@@ -71,17 +98,50 @@ function Search() {
               }
             },
           }
-
-
         }
       })
+      columns.value.push({
+        title: '操作',
+        key: 'actions',
+        width: 80,
+        fixed: 'right', // 固定在右侧
+        render: (row) => {
+          return h(
+              NButton,
+              {
+                strong: true,
+                tertiary: true,
+                size: 'small',
+                type: 'warning', // 橙色按钮
+                style: 'font-size: 14px; padding: 0 10px;', // 稍微大一点的按钮
+                onClick: () => handleFollow(row)
+              },
+              { default: () => '关注' }
+          )
+        }
+      });
       dataList.value = res.data.result.dataList
+      console.log("sss"+columns.value. length)
+      // 计算并设置表格宽度
+      tableScrollX.value = calculateTableWidth(columns.value);
     } else {
       message.error(res.msg)
     }
   }).catch(err => {
     message.error(err)
   })
+}
+
+// 修改handleFollow方法，使用stock.vue的AddStock逻辑
+function handleFollow(row) {
+  let code=row.MARKET_SHORT_NAME.toLowerCase()+row.SECURITY_CODE
+  Follow(code).then(result => {
+    if (result === "关注成功") {
+      message.success(result)
+    } else {
+      message.error(result)
+    }
+  });
 }
 
 function isNumeric(value) {
@@ -128,7 +188,7 @@ function openCenteredWindow(url, width, height) {
 </script>
 
 <template>
-  <n-grid :cols="24" style="max-height: calc(100vh - 170px)">
+  <n-grid :cols="24" style="max-height: calc(100vh - 165px)">
     <n-gi :span="4">
       <n-list bordered style="text-align: left;" hoverable clickable>
         <n-scrollbar style="max-height: calc(100vh - 170px);">
@@ -161,13 +221,13 @@ function openCenteredWindow(url, width, height) {
       <!--      </n-virtual-list>-->
     </n-gi>
     <n-gi :span="20">
-      <n-flex>
+      <n-flex style="--wails-draggable:no-drag">
         <n-input-group style="text-align: left">
           <n-input :rows="1" clearable v-model:value="search" placeholder="请输入选股指标或者要求"/>
           <n-button type="primary" @click="Search">搜索A股</n-button>
         </n-input-group>
       </n-flex>
-      <n-flex justify="start" v-if="traceInfo" style="margin: 5px 0">
+      <n-flex justify="start" v-if="traceInfo" style="margin: 5px 0;--wails-draggable:no-drag">
 
         <n-ellipsis line-clamp="1" :tooltip="true">
           <n-text type="info" :bordered="false">选股条件：</n-text>
@@ -183,12 +243,12 @@ function openCenteredWindow(url, width, height) {
       </n-flex>
       <n-data-table
           :striped="true"
-          :max-height="'calc(100vh - 250px)'"
+          :max-height="'calc(100vh - 150px)'"
           size="medium"
           :columns="columns"
           :data="dataList"
-          :pagination="{pageSize: 9}"
-          :scroll-x="1800"
+          :pagination="{pageSize: 10}"
+          :scroll-x="tableScrollX"
           :render-cell="(value, rowData, column) => {
 
         if(column.key=='SECURITY_CODE'||column.key=='SERIAL'){
@@ -218,10 +278,10 @@ function openCenteredWindow(url, width, height) {
           }
       }"
       />
-      <n-text>共找到
+      <div style="margin-top: -25px">共找到
         <n-tag type="info" :bordered="false">{{ dataList.length }}</n-tag>
         只股
-      </n-text>
+      </div>
     </n-gi>
   </n-grid>
 

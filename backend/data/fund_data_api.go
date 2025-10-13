@@ -20,13 +20,13 @@ import (
 
 type FundApi struct {
 	client *resty.Client
-	config *Settings
+	config *SettingConfig
 }
 
 func NewFundApi() *FundApi {
 	return &FundApi{
 		client: resty.New(),
-		config: GetConfig(),
+		config: GetSettingConfig(),
 	}
 }
 

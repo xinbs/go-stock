@@ -28,7 +28,7 @@ import {
   Wallet, WarningOutline,
 } from '@vicons/ionicons5'
 import {AnalyzeSentiment, GetConfig, GetGroupList,GetVersionInfo} from "../wailsjs/go/main/App";
-import {Dragon, Fire, Gripfire} from "@vicons/fa";
+import {Dragon, Fire, FirefoxBrowser, Gripfire, Robot} from "@vicons/fa";
 import {ReportSearch} from "@vicons/tabler";
 import {LocalFireDepartmentRound} from "@vicons/material";
 import {BoxSearch20Regular, CommentNote20Filled} from "@vicons/fluent";
@@ -369,6 +369,28 @@ const menuOptions = ref([
         key: 'market11',
         icon: renderIcon(BoxSearch20Regular),
       },
+      {
+        label: () =>
+            h(
+                RouterLink,
+                {
+                  href: '#',
+                  to: {
+                    name: 'market',
+                    query: {
+                      name: "名站优选",
+                    }
+                  },
+                  onClick: () => {
+                    activeKey.value = 'market'
+                    EventsEmit("changeMarketTab", {ID: 0, name: '名站优选'})
+                  },
+                },
+                {default: () => '名站优选',}
+            ),
+        key: 'market12',
+        icon: renderIcon(FirefoxBrowser),
+      },
     ]
   },
   {
@@ -399,6 +421,26 @@ const menuOptions = ref([
         icon: renderIcon(AlarmOutline),
       },
     ]
+  },
+  {
+    label: () =>
+        h(
+            RouterLink,
+            {
+              to: {
+                name: 'agent',
+                query: {
+                  name:"Ai智能体",
+                },
+                onClick: () => {
+                  activeKey.value = 'agent'
+                },
+              }
+            },
+            {default: () => 'Ai智能体'}
+        ),
+    key: 'agent',
+    icon: renderIcon(Robot),
   },
   {
     label: () =>
@@ -441,6 +483,7 @@ const menuOptions = ref([
     icon: renderIcon(LogoGithub),
   },
   {
+    show:false,
     label: () => h("a", {
       href: '#',
       onClick: toggleFullscreen,
@@ -654,7 +697,7 @@ onMounted(() => {
           content: () => h('div',{type:"info",style:{
             "text-align":"left",
               "font-size":"14px",
-              "color":"#F98C24"
+              "color": data.source==="go-stock"?"#F98C24":"#549EC8"
             }}, { default: () => data.content }),
           meta: () => h(NText,{type:"warning"}, { default: () => data.source}),
           duration:1000*30 ,
@@ -690,7 +733,7 @@ onMounted(() => {
                     </n-spin>
                   </n-gi>
                   <n-gi style="position: fixed;bottom:0;z-index: 9;width: 100%;">
-                    <n-card size="small" style="--wails-draggable:drag">
+                    <n-card size="small" style="--wails-draggable:no-drag">
                       <n-menu style="font-size: 18px;"
                               v-model:value="activeKey"
                               mode="horizontal"

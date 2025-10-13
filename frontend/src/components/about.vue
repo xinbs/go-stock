@@ -104,7 +104,7 @@ EventsOn("updateVersion",async (msg) => {
 </script>
 
 <template>
-      <n-space vertical size="large"  style="--wails-draggable:drag">
+      <n-space vertical size="large"  style="--wails-draggable:no-drag">
         <!-- 软件描述 -->
         <n-card size="large">
           <n-divider title-placement="center">关于软件</n-divider>
@@ -119,7 +119,7 @@ EventsOn("updateVersion",async (msg) => {
               </n-badge>
             </h1>
             <n-gradient-text type="warning"  v-if="vipLevel" >vip到期时间：{{vipEndTime}}</n-gradient-text>
-            <n-button size="tiny" @click="CheckUpdate"  type="info" tertiary >检查更新</n-button>
+            <n-button size="tiny" @click="CheckUpdate(1)"  type="info" tertiary >检查更新</n-button>
             <div style="justify-self: center;text-align: left" >
               <p>自选股行情实时监控，基于Wails和NaiveUI构建的AI赋能股票分析工具</p>
               <p>目前已支持A股，港股，美股，未来计划加入基金，ETF等支持</p>

@@ -2,6 +2,8 @@ package util
 
 import (
 	"fmt"
+	"github.com/duke-git/lancet/v2/convertor"
+	"github.com/duke-git/lancet/v2/strutil"
 	"reflect"
 	"strings"
 )
@@ -217,7 +219,7 @@ func formatValue(value reflect.Value) string {
 	}
 
 	// 基本类型
-	return fmt.Sprintf("%v", value.Interface())
+	return fmt.Sprintf("%s", strutil.RemoveNonPrintable(convertor.ToString(value.Interface())))
 }
 
 // 示例结构体

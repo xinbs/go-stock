@@ -2,9 +2,12 @@ package data
 
 import (
 	"encoding/json"
+	"errors"
+	"github.com/samber/lo"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"gorm.io/gorm"
+	"time"
 )
 
 type Settings struct {
@@ -15,113 +18,198 @@ type Settings struct {
 	DingRobot              string `json:"dingRobot"`
 	UpdateBasicInfoOnStart bool   `json:"updateBasicInfoOnStart"`
 	RefreshInterval        int64  `json:"refreshInterval"`
-
-	OpenAiEnable      bool    `json:"openAiEnable"`
-	OpenAiBaseUrl     string  `json:"openAiBaseUrl"`
-	OpenAiApiKey      string  `json:"openAiApiKey"`
-	OpenAiModelName   string  `json:"openAiModelName"`
-	OpenAiMaxTokens   int     `json:"openAiMaxTokens"`
-	OpenAiTemperature float64 `json:"openAiTemperature"`
-	OpenAiApiTimeOut  int     `json:"openAiApiTimeOut"`
-	Prompt            string  `json:"prompt"`
-	CheckUpdate       bool    `json:"checkUpdate"`
-	QuestionTemplate  string  `json:"questionTemplate"`
-	CrawlTimeOut      int64   `json:"crawlTimeOut"`
-	KDays             int64   `json:"kDays"`
-	EnableDanmu       bool    `json:"enableDanmu"`
-	BrowserPath       string  `json:"browserPath"`
-	EnableNews        bool    `json:"enableNews"`
-	DarkTheme         bool    `json:"darkTheme"`
-	BrowserPoolSize   int     `json:"browserPoolSize"`
-	EnableFund        bool    `json:"enableFund"`
-	EnablePushNews    bool    `json:"enablePushNews"`
-	SponsorCode       string  `json:"sponsorCode"`
+	OpenAiEnable           bool   `json:"openAiEnable"`
+	Prompt                 string `json:"prompt"`
+	CheckUpdate            bool   `json:"checkUpdate"`
+	QuestionTemplate       string `json:"questionTemplate"`
+	CrawlTimeOut           int64  `json:"crawlTimeOut"`
+	KDays                  int64  `json:"kDays"`
+	EnableDanmu            bool   `json:"enableDanmu"`
+	BrowserPath            string `json:"browserPath"`
+	EnableNews             bool   `json:"enableNews"`
+	DarkTheme              bool   `json:"darkTheme"`
+	BrowserPoolSize        int    `json:"browserPoolSize"`
+	EnableFund             bool   `json:"enableFund"`
+	EnablePushNews         bool   `json:"enablePushNews"`
+	EnableOnlyPushRedNews  bool   `json:"enableOnlyPushRedNews"`
+	SponsorCode            string `json:"sponsorCode"`
+	HttpProxy              string `json:"httpProxy"`
+	HttpProxyEnabled       bool   `json:"httpProxyEnabled"`
 }
 
 func (receiver Settings) TableName() string {
 	return "settings"
 }
 
-type SettingsApi struct {
-	Config Settings
+type AIConfig struct {
+	ID          uint `gorm:"primarykey"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Name        string  `json:"name"`
+	BaseUrl     string  `json:"baseUrl"`
+	ApiKey      string  `json:"apiKey" `
+	ModelName   string  `json:"modelName"`
+	MaxTokens   int     `json:"maxTokens"`
+	Temperature float64 `json:"temperature"`
+	TimeOut     int     `json:"timeOut"`
 }
 
-func NewSettingsApi(settings *Settings) *SettingsApi {
+func (AIConfig) TableName() string {
+	return "ai_config"
+}
+
+type SettingConfig struct {
+	*Settings
+	AiConfigs []*AIConfig `json:"aiConfigs"`
+}
+
+type SettingsApi struct {
+	Config *SettingConfig
+}
+
+func NewSettingsApi() *SettingsApi {
 	return &SettingsApi{
-		Config: *settings,
+		Config: GetSettingConfig(),
 	}
 }
 
-func (s SettingsApi) UpdateConfig() string {
+func (s *SettingsApi) Export() string {
+	d, _ := json.MarshalIndent(s.Config, "", "    ")
+	return string(d)
+}
+
+func UpdateConfig(s *SettingConfig) string {
 	count := int64(0)
-	db.Dao.Model(s.Config).Count(&count)
+	db.Dao.Model(&Settings{}).Count(&count)
 	if count > 0 {
-		db.Dao.Model(s.Config).Where("id=?", s.Config.ID).Updates(map[string]any{
-			"local_push_enable":          s.Config.LocalPushEnable,
-			"ding_push_enable":           s.Config.DingPushEnable,
-			"ding_robot":                 s.Config.DingRobot,
-			"update_basic_info_on_start": s.Config.UpdateBasicInfoOnStart,
-			"refresh_interval":           s.Config.RefreshInterval,
-			"open_ai_enable":             s.Config.OpenAiEnable,
-			"open_ai_base_url":           s.Config.OpenAiBaseUrl,
-			"open_ai_api_key":            s.Config.OpenAiApiKey,
-			"open_ai_model_name":         s.Config.OpenAiModelName,
-			"open_ai_max_tokens":         s.Config.OpenAiMaxTokens,
-			"open_ai_temperature":        s.Config.OpenAiTemperature,
-			"tushare_token":              s.Config.TushareToken,
-			"prompt":                     s.Config.Prompt,
-			"check_update":               s.Config.CheckUpdate,
-			"open_ai_api_time_out":       s.Config.OpenAiApiTimeOut,
-			"question_template":          s.Config.QuestionTemplate,
-			"crawl_time_out":             s.Config.CrawlTimeOut,
-			"k_days":                     s.Config.KDays,
-			"enable_danmu":               s.Config.EnableDanmu,
-			"browser_path":               s.Config.BrowserPath,
-			"enable_news":                s.Config.EnableNews,
-			"dark_theme":                 s.Config.DarkTheme,
-			"enable_fund":                s.Config.EnableFund,
-			"enable_push_news":           s.Config.EnablePushNews,
-			"sponsor_code":               s.Config.SponsorCode,
+		db.Dao.Model(&Settings{}).Where("id=?", s.ID).Updates(map[string]any{
+			"local_push_enable":          s.LocalPushEnable,
+			"ding_push_enable":           s.DingPushEnable,
+			"ding_robot":                 s.DingRobot,
+			"update_basic_info_on_start": s.UpdateBasicInfoOnStart,
+			"refresh_interval":           s.RefreshInterval,
+			"open_ai_enable":             s.OpenAiEnable,
+			"tushare_token":              s.TushareToken,
+			"prompt":                     s.Prompt,
+			"check_update":               s.CheckUpdate,
+			"question_template":          s.QuestionTemplate,
+			"crawl_time_out":             s.CrawlTimeOut,
+			"k_days":                     s.KDays,
+			"enable_danmu":               s.EnableDanmu,
+			"browser_path":               s.BrowserPath,
+			"enable_news":                s.EnableNews,
+			"dark_theme":                 s.DarkTheme,
+			"enable_fund":                s.EnableFund,
+			"enable_push_news":           s.EnablePushNews,
+			"enable_only_push_red_news":  s.EnableOnlyPushRedNews,
+			"sponsor_code":               s.SponsorCode,
+			"http_proxy":                 s.HttpProxy,
+			"http_proxy_enabled":         s.HttpProxyEnabled,
 		})
+
+		//更新AiConfig
+		err := updateAiConfigs(s.AiConfigs)
+		if err != nil {
+			logger.SugaredLogger.Errorf("更新AI模型服务配置失败: %v", err)
+			return "更新AI模型服务配置失败: " + err.Error()
+		}
 	} else {
-		logger.SugaredLogger.Infof("未找到配置，创建默认配置:%+v", s.Config)
-		db.Dao.Model(s.Config).Create(&Settings{
-			LocalPushEnable:        s.Config.LocalPushEnable,
-			DingPushEnable:         s.Config.DingPushEnable,
-			DingRobot:              s.Config.DingRobot,
-			UpdateBasicInfoOnStart: s.Config.UpdateBasicInfoOnStart,
-			RefreshInterval:        s.Config.RefreshInterval,
-			OpenAiEnable:           s.Config.OpenAiEnable,
-			OpenAiBaseUrl:          s.Config.OpenAiBaseUrl,
-			OpenAiApiKey:           s.Config.OpenAiApiKey,
-			OpenAiModelName:        s.Config.OpenAiModelName,
-			OpenAiMaxTokens:        s.Config.OpenAiMaxTokens,
-			OpenAiTemperature:      s.Config.OpenAiTemperature,
-			TushareToken:           s.Config.TushareToken,
-			Prompt:                 s.Config.Prompt,
-			CheckUpdate:            s.Config.CheckUpdate,
-			OpenAiApiTimeOut:       s.Config.OpenAiApiTimeOut,
-			QuestionTemplate:       s.Config.QuestionTemplate,
-			CrawlTimeOut:           s.Config.CrawlTimeOut,
-			KDays:                  s.Config.KDays,
-			EnableDanmu:            s.Config.EnableDanmu,
-			BrowserPath:            s.Config.BrowserPath,
-			EnableNews:             s.Config.EnableNews,
-			DarkTheme:              s.Config.DarkTheme,
-			EnableFund:             s.Config.EnableFund,
-			EnablePushNews:         s.Config.EnablePushNews,
-			SponsorCode:            s.Config.SponsorCode,
-		})
+		logger.SugaredLogger.Infof("未找到配置，创建默认配置")
+		// 创建主配置
+		result := db.Dao.Model(&Settings{}).Create(&Settings{})
+		if result.Error != nil {
+			logger.SugaredLogger.Error("创建配置失败:", result.Error)
+			return "创建配置失败: " + result.Error.Error()
+		}
 	}
 	return "保存成功！"
 }
-func (s SettingsApi) GetConfig() *Settings {
-	var settings Settings
-	db.Dao.Model(&Settings{}).First(&settings)
+
+func updateAiConfigs(aiConfigs []*AIConfig) error {
+	if len(aiConfigs) == 0 {
+		err := db.Dao.Exec("DELETE FROM ai_config").Error
+		if err != nil {
+			return err
+		}
+		return db.Dao.Exec("DELETE FROM sqlite_sequence WHERE name='ai_config'").Error
+	}
+	var ids []uint
+	lo.ForEach(aiConfigs, func(item *AIConfig, index int) {
+		ids = append(ids, item.ID)
+	})
+	var existAiConfigs []*AIConfig
+	err := db.Dao.Model(&AIConfig{}).Select("id").Where("id in (?) ", ids).Find(&existAiConfigs).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	idMap := make(map[uint]bool)
+	lo.ForEach(existAiConfigs, func(item *AIConfig, index int) {
+		idMap[item.ID] = true
+	})
+	var addAiConfigs []*AIConfig
+	var notDeleteIds []uint
+	var e error
+	lo.ForEach(aiConfigs, func(item *AIConfig, index int) {
+		if e != nil {
+			return
+		}
+		if !idMap[item.ID] {
+			addAiConfigs = append(addAiConfigs, item)
+		} else {
+			notDeleteIds = append(notDeleteIds, item.ID)
+			e = db.Dao.Model(&AIConfig{}).Where("id=?", item.ID).Updates(map[string]interface{}{
+				"name":        item.Name,
+				"base_url":    item.BaseUrl,
+				"api_key":     item.ApiKey,
+				"model_name":  item.ModelName,
+				"max_tokens":  item.MaxTokens,
+				"temperature": item.Temperature,
+				"time_out":    item.TimeOut,
+			}).Error
+			if e != nil {
+				return
+			}
+		}
+	})
+	if e != nil {
+		return e
+	}
+	//删除旧的配置
+	if len(notDeleteIds) > 0 {
+		err = db.Dao.Exec("DELETE FROM ai_config WHERE id NOT IN ?", notDeleteIds).Error
+		if err != nil {
+			return err
+		}
+	}
+	logger.SugaredLogger.Infof("更新aiConfigs +%d", len(addAiConfigs))
+	//批量新增的配置
+	err = db.Dao.CreateInBatches(addAiConfigs, len(addAiConfigs)).Error
+	return err
+}
+
+func GetSettingConfig() *SettingConfig {
+	settingConfig := &SettingConfig{}
+	settings := &Settings{}
+	aiConfigs := make([]*AIConfig, 0)
+	// 处理数据库查询可能返回的空结果
+	result := db.Dao.Model(&Settings{}).First(settings)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		// 初始化默认设置并保存到数据库
+		settings = &Settings{OpenAiEnable: false, CrawlTimeOut: 60}
+		db.Dao.Create(settings)
+	}
 
 	if settings.OpenAiEnable {
-		if settings.OpenAiApiTimeOut <= 0 {
-			settings.OpenAiApiTimeOut = 60 * 5
+		// 处理AI配置查询可能出现的错误
+		result = db.Dao.Model(&AIConfig{}).Find(&aiConfigs)
+		if result.Error != nil {
+			logger.SugaredLogger.Error("查询AI配置失败:", result.Error)
+		} else if len(aiConfigs) > 0 {
+			lo.ForEach(aiConfigs, func(item *AIConfig, index int) {
+				if item.TimeOut <= 0 {
+					item.TimeOut = 60 * 5
+				}
+			})
 		}
 		if settings.CrawlTimeOut <= 0 {
 			settings.CrawlTimeOut = 60
@@ -136,10 +224,8 @@ func (s SettingsApi) GetConfig() *Settings {
 	if settings.BrowserPoolSize <= 0 {
 		settings.BrowserPoolSize = 1
 	}
-	return &settings
-}
+	settingConfig.Settings = settings
+	settingConfig.AiConfigs = aiConfigs
 
-func (s SettingsApi) Export() string {
-	d, _ := json.MarshalIndent(s.GetConfig(), "", "    ")
-	return string(d)
+	return settingConfig
 }

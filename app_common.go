@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"go-stock/backend/agent"
 	"go-stock/backend/data"
 	"go-stock/backend/models"
 )
@@ -61,4 +63,11 @@ func (a App) SearchStock(words string) map[string]any {
 }
 func (a App) GetHotStrategy() map[string]any {
 	return data.NewSearchStockApi("").HotStrategy()
+}
+
+func (a App) ChatWithAgent(question string, aiConfigId int, sysPromptId *int) {
+	ch := agent.NewStockAiAgentApi().Chat(question, aiConfigId, sysPromptId)
+	for msg := range ch {
+		runtime.EventsEmit(a.ctx, "agent-message", msg)
+	}
 }

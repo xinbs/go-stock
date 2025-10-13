@@ -37,7 +37,7 @@ const tushareApiUrl = "http://api.tushare.pro"
 
 type StockDataApi struct {
 	client *resty.Client
-	config *Settings
+	config *SettingConfig
 }
 type StockInfo struct {
 	gorm.Model
@@ -153,6 +153,8 @@ type StockBasic struct {
 	IsHs       string `json:"is_hs"`
 	ActName    string `json:"act_name"`
 	ActEntType string `json:"act_ent_type"`
+	BKName     string `json:"bk_name"`
+	BKCode     string `json:"bk_code"`
 }
 
 type FollowedStock struct {
@@ -170,6 +172,7 @@ type FollowedStock struct {
 	Cron               *string
 	IsDel              soft_delete.DeletedAt `gorm:"softDelete:flag"`
 	Groups             []GroupStock          `gorm:"foreignKey:StockCode;references:StockCode"`
+	AiConfigId         int
 }
 
 func (receiver FollowedStock) TableName() string {
@@ -194,7 +197,7 @@ func (receiver StockBasic) TableName() string {
 func NewStockDataApi() *StockDataApi {
 	return &StockDataApi{
 		client: resty.New(),
-		config: GetConfig(),
+		config: GetSettingConfig(),
 	}
 }
 
@@ -375,6 +378,9 @@ func (receiver StockDataApi) GetStockCodeRealTimeData(StockCodes ...string) (*[]
 			logger.SugaredLogger.Error(err.Error())
 			continue
 		}
+		if stockData == nil {
+			continue
+		}
 		stockInfos = append(stockInfos, *stockData)
 
 		go func() {
@@ -413,6 +419,15 @@ func (receiver StockDataApi) Follow(stockCode string) string {
 	}
 
 	stockCode = strings.ToLower(stockCode)
+
+	// 检查是否已经关注过该股票
+	var existingStock FollowedStock
+	result := db.Dao.Model(&FollowedStock{}).Where("stock_code = ? AND is_del = ?", stockCode, 0).First(&existingStock)
+	if result.Error == nil {
+		// 股票已经关注过
+		return "已经关注了"
+	}
+
 	maxSort := int64(0)
 	db.Dao.Model(&FollowedStock{}).Raw("select max(sort) as sort from followed_stock").Scan(&maxSort)
 
@@ -1162,7 +1177,7 @@ func getHKStockPriceInfo(stockCode string, crawlTimeOut int64) *[]string {
 	return &messages
 }
 
-func getZSInfo(name, stockCode string, crawlTimeOut int64) string {
+func GetZSInfo(name, stockCode string, crawlTimeOut int64) string {
 	url := "https://finance.sina.com.cn/realstock/company/" + stockCode + "/nc.shtml"
 	crawlerAPI := CrawlerApi{}
 	crawlerBaseInfo := CrawlerBaseInfo{
@@ -1186,6 +1201,10 @@ func getZSInfo(name, stockCode string, crawlTimeOut int64) string {
 	//price
 	price := strutil.RemoveWhiteSpace(document.Find("div#price").First().Text(), false)
 	hqTime := strutil.RemoveWhiteSpace(document.Find("div#hqTime").First().Text(), false)
+
+	if strutil.ContainsAny(price, []string{"-", "--", ""}) {
+		return "暂无数据"
+	}
 
 	var markdown strings.Builder
 	markdown.WriteString(fmt.Sprintf("### 时间：%s %s：%s \n", hqTime, name, price))
@@ -1454,7 +1473,7 @@ func getSinaStockInfo(receiver StockDataApi, page, pageSize int) *[]models.SinaS
 func (receiver StockDataApi) getDCStockInfo(market string, page, pageSize int) {
 	//m:105,m:106,m:107  //美股
 	//m:128+t:3,m:128+t:4,m:128+t:1,m:128+t:2 //港股
-	fs := ""
+	fs := "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048"
 	switch market {
 	case "hk":
 		fs = "m:128+t:3,m:128+t:4,m:128+t:1,m:128+t:2"
@@ -1462,68 +1481,133 @@ func (receiver StockDataApi) getDCStockInfo(market string, page, pageSize int) {
 		fs = "m:105,m:106,m:107"
 	}
 
-	url := "https://push2.eastmoney.com/api/qt/clist/get?cb=jQuery371047843066631541353_1745889398012&fs=%s&fields=f12,f13,f14,f19,f1,f2,f4,f3,f152,f17,f18,f15,f16,f5,f6&fid=f3&pn=%d&pz=%d&po=1&dect=1"
+	url := "https://push2.eastmoney.com/api/qt/clist/get?np=1&fltt=1&invt=2&cb=data&fs=%s&fields=f12,f13,f14,f1,f2,f4,f3,f152,f5,f6,f7,f15,f18,f16,f17,f10,f8,f9,f23,f100,f265&fid=f3&pn=%d&pz=%d&po=1&dect=1&wbp2u=|0|0|0|web&_=%d"
+	sprintfUrl := fmt.Sprintf(url, fs, page, pageSize, time.Now().UnixMilli())
+	logger.SugaredLogger.Infof("url:%s", sprintfUrl)
 	resp, err := receiver.client.SetTimeout(time.Duration(receiver.config.CrawlTimeOut)*time.Second).R().
 		SetHeader("Host", "push2.eastmoney.com").
+		SetHeader("Referer", "https://quote.eastmoney.com/center/gridlist.html").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0").
-		Get(fmt.Sprintf(url, fs, page, pageSize))
+		Get(sprintfUrl)
 	if err != nil {
 		logger.SugaredLogger.Errorf("err:%s", err.Error())
 		return
 	}
 	body := string(resp.Body())
-	body = strutil.ReplaceWithMap(body, map[string]string{
-		"jQuery371047843066631541353_1745889398012(": "",
-		");": "",
-	})
-	js := "var d=" + body
+	logger.SugaredLogger.Infof("resp:%s", body)
 	vm := otto.New()
-	_, err = vm.Run(js)
-	_, err = vm.Run("var data = JSON.stringify(d);")
-	value, err := vm.Get("data")
-	data := make(map[string]any)
-	err = json.Unmarshal([]byte(value.String()), &data)
+	vm.Run("function data(res){return res};")
+	val, err := vm.Run(body)
 	if err != nil {
-		logger.SugaredLogger.Errorf("json:%s", value.String())
+		logger.SugaredLogger.Errorf("vm.Run error:%v", err.Error())
+	}
+	value, _ := val.Object().Value().Export()
+	marshal, err := json.Marshal(value)
+	data := make(map[string]any)
+	err = json.Unmarshal(marshal, &data)
+	if err != nil {
 		logger.SugaredLogger.Errorf("json.Unmarshal error:%v", err.Error())
 	}
 	logger.SugaredLogger.Infof("resp:%s", data)
 	if data["data"] != nil {
 		datas := data["data"].(map[string]any)
 		total := datas["total"].(float64)
-		diff := datas["diff"].(map[string]any)
+		diff := datas["diff"].([]any)
 		logger.SugaredLogger.Infof("total:%d", int(total))
 		for k, item := range diff {
 			stock := item.(map[string]any)
-			logger.SugaredLogger.Infof("k:%s,%s:%s", k, stock["f14"], stock["f12"])
+			logger.SugaredLogger.Infof("k:%d,%s:%s:%s %s:%s", k, stock["f14"], stock["f12"], DCToTsCode(stock["f12"].(string)), stock["f100"], stock["f265"])
+
+			if market == "" {
+				stockInfo := &StockBasic{
+					Symbol: stock["f12"].(string),
+					TsCode: DCToTsCode(stock["f12"].(string)),
+					Name:   stock["f14"].(string),
+					BKName: stock["f100"].(string),
+					BKCode: stock["f265"].(string),
+				}
+				db.Dao.Model(&StockBasic{}).Where("symbol = ?", stockInfo.Symbol).First(stockInfo)
+				logger.SugaredLogger.Infof("stockInfo:%+v", stockInfo)
+				if stockInfo.ID == 0 {
+					db.Dao.Model(&StockBasic{}).Create(stockInfo)
+				} else {
+					stockInfo = &StockBasic{
+						Symbol: stock["f12"].(string),
+						TsCode: DCToTsCode(stock["f12"].(string)),
+						Name:   stock["f14"].(string),
+						BKName: stock["f100"].(string),
+						BKCode: stock["f265"].(string),
+					}
+					db.Dao.Model(&StockBasic{}).Where("symbol = ?", stockInfo.Symbol).Updates(stockInfo)
+				}
+			}
 
 			if market == "hk" {
 				stockInfo := &models.StockInfoHK{
-					Code: strutil.PadStart(stock["f12"].(string), 5, "0") + ".HK",
-					Name: stock["f14"].(string),
+					Code:   strutil.PadStart(stock["f12"].(string), 5, "0") + ".HK",
+					Name:   stock["f14"].(string),
+					BKName: stock["f100"].(string),
+					BKCode: stock["f265"].(string),
 				}
 				db.Dao.Model(&models.StockInfoHK{}).Where("code = ?", stockInfo.Code).First(stockInfo)
 				logger.SugaredLogger.Infof("stockInfo:%+v", stockInfo)
 				if stockInfo.ID == 0 {
 					db.Dao.Model(&models.StockInfoHK{}).Create(stockInfo)
+				} else {
+					stockInfo = &models.StockInfoHK{
+						Code:   strutil.PadStart(stock["f12"].(string), 5, "0") + ".HK",
+						Name:   stock["f14"].(string),
+						BKName: stock["f100"].(string),
+						BKCode: stock["f265"].(string),
+					}
+					db.Dao.Model(&models.StockInfoHK{}).Where("code = ?", stockInfo.Code).Updates(stockInfo)
 				}
 			}
 
 			if market == "us" {
 				stockInfo := &models.StockInfoUS{
-					Code: strutil.PadStart(stock["f12"].(string), 5, "0") + ".US",
-					Name: stock["f14"].(string),
+					Code:   strutil.PadStart(stock["f12"].(string), 5, "0") + ".US",
+					Name:   stock["f14"].(string),
+					BKName: stock["f100"].(string),
+					BKCode: stock["f265"].(string),
 				}
 				db.Dao.Model(&models.StockInfoUS{}).Where("code = ?", stockInfo.Code).First(stockInfo)
 				logger.SugaredLogger.Infof("stockInfo:%+v", stockInfo)
 				if stockInfo.ID == 0 {
 					db.Dao.Model(&models.StockInfoUS{}).Create(stockInfo)
+				} else {
+					stockInfo = &models.StockInfoUS{
+						Code:   strutil.PadStart(stock["f12"].(string), 5, "0") + ".US",
+						Name:   stock["f14"].(string),
+						BKName: stock["f100"].(string),
+						BKCode: stock["f265"].(string),
+					}
+					db.Dao.Model(&models.StockInfoUS{}).Where("code = ?", stockInfo.Code).Updates(stockInfo)
 				}
 			}
 
 		}
 
 	}
+}
+
+func DCToTsCode(dcCode string) string {
+	//北京证券交易所	8（83、87、88 等）	创新型中小企业（专精特新为主）
+	//上海证券交易所	6（60、688 等）	大盘蓝筹、科创板（高新技术）
+	//深圳证券交易所	0、3（000、002、30 等）	中小盘、创业板（成长型创新企业）
+	switch dcCode[0:1] {
+	case "8":
+		return dcCode + ".BJ"
+	case "9":
+		return dcCode + ".BJ"
+	case "6":
+		return dcCode + ".SH"
+	case "0":
+		return dcCode + ".SZ"
+	case "3":
+		return dcCode + ".SZ"
+	}
+	return ""
 }
 
 func (receiver StockDataApi) GetHKStockInfo(pageSize int) {

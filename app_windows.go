@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/duke-git/lancet/v2/convertor"
 	"github.com/duke-git/lancet/v2/strutil"
@@ -37,21 +36,21 @@ func (a *App) startup(ctx context.Context) {
 	//})
 	runtime.EventsOn(ctx, "updateSettings", func(optionalData ...interface{}) {
 		logger.SugaredLogger.Infof("updateSettings : %v\n", optionalData)
-		config := &data.Settings{}
-		setMap := optionalData[0].(map[string]interface{})
-
-		// 将 map 转换为 JSON 字节切片
-		jsonData, err := json.Marshal(setMap)
-		if err != nil {
-			logger.SugaredLogger.Errorf("Marshal error:%s", err.Error())
-			return
-		}
-		// 将 JSON 字节切片解析到结构体中
-		err = json.Unmarshal(jsonData, config)
-		if err != nil {
-			logger.SugaredLogger.Errorf("Unmarshal error:%s", err.Error())
-			return
-		}
+		config := data.GetSettingConfig()
+		//setMap := optionalData[0].(map[string]interface{})
+		//
+		//// 将 map 转换为 JSON 字节切片
+		//jsonData, err := json.Marshal(setMap)
+		//if err != nil {
+		//	logger.SugaredLogger.Errorf("Marshal error:%s", err.Error())
+		//	return
+		//}
+		//// 将 JSON 字节切片解析到结构体中
+		//err = json.Unmarshal(jsonData, config)
+		//if err != nil {
+		//	logger.SugaredLogger.Errorf("Unmarshal error:%s", err.Error())
+		//	return
+		//}
 
 		logger.SugaredLogger.Infof("updateSettings config:%+v", config)
 		if config.DarkTheme {

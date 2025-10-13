@@ -4,17 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/duke-git/lancet/v2/convertor"
-	"github.com/duke-git/lancet/v2/random"
-	"github.com/duke-git/lancet/v2/strutil"
-	"github.com/go-resty/resty/v2"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
+	"go-stock/backend/util"
 	"io/ioutil"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/duke-git/lancet/v2/convertor"
+	"github.com/duke-git/lancet/v2/random"
+	"github.com/duke-git/lancet/v2/strutil"
+	"github.com/go-resty/resty/v2"
 )
 
 // @Author spark
@@ -48,14 +50,23 @@ func TestGetFinancialReports(t *testing.T) {
 
 func TestGetTelegraphSearch(t *testing.T) {
 	db.Init("../../data/stock.db")
+	searchWords := "半导体 新能源汽车 机器人"
 	//url := "https://www.cls.cn/searchPage?keyword=%E9%97%BB%E6%B3%B0%E7%A7%91%E6%8A%80&type=telegram"
-	messages := SearchStockInfo("谷歌", "telegram", 30)
+	messages := SearchStockInfo(searchWords, "telegram", 30)
 	for _, message := range *messages {
 		logger.SugaredLogger.Info(message)
 	}
 
 	//https://www.cls.cn/stock?code=sh600745
 }
+func TestCailianpressWeb(t *testing.T) {
+	db.Init("../../data/stock.db")
+	searchWords := "半导体 新能源汽车 机器人"
+	res := NewMarketNewsApi().CailianpressWeb(searchWords)
+	md := util.MarkdownTableWithTitle(searchWords+"财联社新闻", res.List)
+	logger.SugaredLogger.Info(md)
+}
+
 func TestSearchStockInfoByCode(t *testing.T) {
 	db.Init("../../data/stock.db")
 	SearchStockInfoByCode("sh600745")
@@ -63,7 +74,7 @@ func TestSearchStockInfoByCode(t *testing.T) {
 
 func TestSearchStockPriceInfo(t *testing.T) {
 	db.Init("../../data/stock.db")
-	//SearchStockPriceInfo("中信证券", "hk06030", 30)
+	SearchStockPriceInfo("博安生物", "hk06955", 30)
 	SearchStockPriceInfo("上海贝岭", "sh600171", 30)
 	//SearchStockPriceInfo("苹果公司", "gb_aapl", 30)
 	//SearchStockPriceInfo("微创光电", "bj430198", 30)
@@ -110,7 +121,8 @@ func TestGetHKStockInfo(t *testing.T) {
 	//NewStockDataApi().GetSinaHKStockInfo()
 	//m:105,m:106,m:107  //美股
 	//m:128+t:3,m:128+t:4,m:128+t:1,m:128+t:2 //港股
-	for i := 1; i <= 592; i++ {
+	//287  224 605
+	for i := 1; i <= 605; i++ {
 		NewStockDataApi().getDCStockInfo("us", i, 20)
 		time.Sleep(time.Duration(random.RandInt(1, 3)) * time.Second)
 	}

@@ -50,7 +50,7 @@ jobs:
           build-name: ${{ matrix.build.name }}
           build-platform: ${{ matrix.build.platform }}
           package: true
-          go-version: '1.24'
+          go-version: '1.25'
           build-tags: ${{ github.ref_name }}
           build-commit-message: ${{ steps.get_commit_message.outputs.commit_message }}
           build-statement: ${{ env.OFFICIAL_STATEMENT }}

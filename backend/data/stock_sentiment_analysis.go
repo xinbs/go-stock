@@ -3,10 +3,11 @@ package data
 import (
 	"bufio"
 	"fmt"
-	"github.com/go-ego/gse"
 	"go-stock/backend/logger"
 	"os"
 	"strings"
+
+	"github.com/go-ego/gse"
 )
 
 // 金融情感词典，包含股票市场相关的专业词汇

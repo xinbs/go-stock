@@ -2,13 +2,15 @@ package data
 
 import (
 	"encoding/json"
-	"github.com/coocood/freecache"
-	"github.com/tidwall/gjson"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
+	"go-stock/backend/models"
 	"go-stock/backend/util"
 	"strings"
 	"testing"
+
+	"github.com/coocood/freecache"
+	"github.com/tidwall/gjson"
 )
 
 // @Author spark
@@ -71,19 +73,24 @@ func TestLongTiger(t *testing.T) {
 
 func TestStockResearchReport(t *testing.T) {
 	db.Init("../../data/stock.db")
-	resp := NewMarketNewsApi().StockResearchReport("600584.sh", 7)
+	resp := NewMarketNewsApi().StockResearchReport("688082", 7)
 	for _, a := range resp {
 		logger.SugaredLogger.Debugf("value: %+v", a)
+		data := a.(map[string]any)
+		logger.SugaredLogger.Debugf("value: %s  infoCode:%s", data["title"], data["infoCode"])
+		NewMarketNewsApi().GetIndustryReportInfo(data["infoCode"].(string))
 	}
 }
 
 func TestIndustryResearchReport(t *testing.T) {
 	db.Init("../../data/stock.db")
-	resp := NewMarketNewsApi().IndustryResearchReport("", 7)
+	resp := NewMarketNewsApi().IndustryResearchReport("456", 7)
 	for _, a := range resp {
 		logger.SugaredLogger.Debugf("value: %+v", a)
+		data := a.(map[string]any)
+		logger.SugaredLogger.Debugf("value: %s  infoCode:%s", data["title"], data["infoCode"])
+		NewMarketNewsApi().GetIndustryReportInfo(data["infoCode"].(string))
 	}
-
 }
 
 func TestStockNotice(t *testing.T) {
@@ -101,6 +108,15 @@ func TestEMDictCode(t *testing.T) {
 	for _, a := range resp {
 		logger.SugaredLogger.Debugf("value: %+v", a)
 	}
+	bytes, err := json.Marshal(resp)
+	if err != nil {
+		return
+	}
+	dict := &[]models.BKDict{}
+	json.Unmarshal(bytes, dict)
+	logger.SugaredLogger.Debugf("value: %s", string(bytes))
+	md := util.MarkdownTableWithTitle("行业/板块代码", dict)
+	logger.SugaredLogger.Debugf(md)
 
 }
 
@@ -200,4 +216,21 @@ func TestGetPMI(t *testing.T) {
 	res := NewMarketNewsApi().GetPMI()
 	md := util.MarkdownTableWithTitle("采购经理人指数(PMI)", res.PMIResult.Data)
 	logger.SugaredLogger.Debugf(md)
+}
+func TestGetIndustryReportInfo(t *testing.T) {
+	NewMarketNewsApi().GetIndustryReportInfo("AP202507151709216483")
+}
+
+func TestReutersNew(t *testing.T) {
+	db.Init("../../data/stock.db")
+	NewMarketNewsApi().ReutersNew()
+}
+
+func TestInteractiveAnswer(t *testing.T) {
+	db.Init("../../data/stock.db")
+	datas := NewMarketNewsApi().InteractiveAnswer(1, 100, "")
+	logger.SugaredLogger.Debugf("PageSize:%d", datas.PageSize)
+	md := util.MarkdownTableWithTitle("投资互动", datas.Results)
+	logger.SugaredLogger.Debugf(md)
+
 }

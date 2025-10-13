@@ -1,11 +1,13 @@
 //go:build windows
+// +build windows
 
 package data
 
 import (
-	"github.com/go-toast/toast"
 	"go-stock/backend/logger"
 	"testing"
+
+	"github.com/go-toast/toast"
 )
 
 // @Author spark

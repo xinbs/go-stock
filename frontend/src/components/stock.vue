@@ -1,10 +1,11 @@
 <script setup>
-import {computed, h, onBeforeMount, onBeforeUnmount, onMounted, reactive, ref} from 'vue'
+import {computed, h, nextTick, onBeforeMount, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
 import * as echarts from 'echarts';
 import {
   AddGroup,
   AddStockGroup,
   Follow,
+  GetAiConfigs,
   GetAIResponseResult,
   GetConfig,
   GetFollowList,
@@ -15,11 +16,15 @@ import {
   GetStockMinutePriceLineData,
   GetVersionInfo,
   Greet,
+  InitializeGroupSort,
   NewChatStream,
+  OpenURL,
   RemoveGroup,
   RemoveStockGroup,
   SaveAIResponseResult,
   SaveAsMarkdown,
+  SaveImage,
+  SaveWordFile,
   SendDingDingMessageByType,
   SetAlarmChangePercent,
   SetCostPriceAndVolume,
@@ -27,9 +32,7 @@ import {
   SetStockSort,
   ShareAnalysis,
   UnFollow,
-  OpenURL,
-  SaveImage,
-    SaveWordFile
+  UpdateGroupSort
 } from '../../wailsjs/go/main/App'
 import {
   NAvatar,
@@ -67,7 +70,6 @@ import vueDanmaku from 'vue3-danmaku'
 import {keys, padStart} from "lodash";
 import {useRoute, useRouter} from 'vue-router'
 import MoneyTrend from "./moneyTrend.vue";
-import {TaskTools} from "@vicons/carbon";
 import StockSparkLine from "./stockSparkLine.vue";
 
 const route = useRoute()
@@ -120,6 +122,7 @@ const formModel = ref({
 })
 
 const promptTemplates = ref([])
+const aiConfigs = ref([])
 const sysPromptOptions = ref([])
 const userPromptOptions = ref([])
 const data = reactive({
@@ -127,6 +130,7 @@ const data = reactive({
   chatId: "",
   question: "",
   sysPromptId: null,
+  aiConfigId: null,
   name: "",
   code: "",
   fenshiURL: "",
@@ -167,22 +171,137 @@ const sortedResults = computed(() => {
 
 const groupResults = computed(() => {
   const group = {}
-  for (const key in sortedResults.value) {
-    if (stocks.value.includes(sortedResults.value[key]['股票代码'])) {
-      group[key] = sortedResults.value[key]
+  if (currentGroupId.value === 0) {
+    return sortedResults.value
+  } else {
+    for (const key in sortedResults.value) {
+      if (stocks.value.includes(sortedResults.value[key]['股票代码'])) {
+        group[key] = sortedResults.value[key]
+      }
     }
+    return group
   }
-  return group
 })
 const showPopover = ref(false)
+// 拖拽相关变量
+const dragSourceIndex = ref(null)
+const dragTargetIndex = ref(null)
+
+// 拖拽处理函数
+function handleTabDragStart(event, name) {
+  // "全部"标签（name=0）不应该触发拖拽
+  if (name === 0) {
+    event.preventDefault();
+    return;
+  }
+  dragSourceIndex.value = name;
+  event.dataTransfer.effectAllowed = 'move';
+  event.target.classList.add('tab-dragging');
+}
+
+
+function handleTabDragOver(event) {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+}
+
+function handleTabDragEnter(event, name) {
+  event.preventDefault();
+  // "全部"标签（name=0）不应该作为拖拽目标
+  if (name > 0) {
+    dragTargetIndex.value = name;
+    if (event.target.classList) {
+      // 查找最近的标签元素并添加高亮样式
+      let tabElement = event.target.closest('.n-tabs-tab');
+      if (tabElement) {
+        tabElement.classList.add('tab-drag-over');
+      }
+    }
+  }
+}
+
+function handleTabDragLeave(event) {
+  // 查找最近的标签元素并移除高亮样式
+  let tabElement = event.target.closest('.n-tabs-tab')
+  if (tabElement && tabElement.classList) {
+    tabElement.classList.remove('tab-drag-over')
+  }
+  // 不要重置 dragTargetIndex，因为可能会在元素间快速移动
+}
+
+function handleTabDrop(event) {
+  event.preventDefault();
+
+  // 移除所有高亮样式
+  const tabs = document.querySelectorAll('.n-tabs-tab');
+  tabs.forEach(tab => {
+    tab.classList.remove('tab-drag-over');
+  });
+
+  if (dragSourceIndex.value !== null && dragTargetIndex.value !== null &&
+      dragSourceIndex.value !== dragTargetIndex.value) {
+
+    // 确保索引有效（排除"全部"选项卡）
+    if (dragSourceIndex.value > 0 && dragTargetIndex.value > 0) {
+      // 查找源分组和目标分组
+      const sourceGroup = groupList.value.find(g => g.ID === dragSourceIndex.value);
+      const targetGroup = groupList.value.find(g => g.ID === dragTargetIndex.value);
+
+      if (sourceGroup && targetGroup) {
+        // 计算新的位置序号（使用目标分组的sort值）
+        const newSortPosition = targetGroup.sort;
+
+        // 调用后端API更新组排序
+        UpdateGroupSort(sourceGroup.ID, newSortPosition).then(result => {
+          if (result) {
+            message.success('分组排序更新成功');
+            // 重新获取分组列表以更新界面
+            GetGroupList().then(result => {
+              groupList.value = result;
+            });
+          } else {
+            message.error('分组排序更新失败');
+          }
+        }).catch(error => {
+          message.error('分组排序更新失败: ' + error.message);
+        });
+      }
+    }
+  }
+
+  // 重置状态
+  dragSourceIndex.value = null;
+  dragTargetIndex.value = null;
+}
+
+function handleTabDragEnd(event) {
+  // 移除所有高亮样式
+  const tabs = document.querySelectorAll('.n-tabs-tab')
+  tabs.forEach(tab => {
+    tab.classList.remove('tab-drag-over', 'tab-dragging')
+  })
+
+  dragSourceIndex.value = null
+  dragTargetIndex.value = null
+}
 
 onBeforeMount(() => {
   GetGroupList().then(result => {
     groupList.value = result
-    if (route.query.groupId) {
-      message.success("切换分组:" + route.query.groupName)
-      currentGroupId.value = Number(route.query.groupId)
-      //console.log("route.params",route.query)
+    // 检查是否存在相同的序号
+    const sorts = result.map(item => item.sort);
+    const uniqueSorts = new Set(sorts);
+    // 如果存在重复的序号，则重新初始化序号
+    if (sorts.length !== uniqueSorts.size) {
+      // 调用InitializeGroupSort重新初始化序号
+      // 然后重新获取分组列表
+      fetchGroupList();
+    } else {
+      // 没有重复序号，继续正常流程
+      if (route.query.groupId) {
+        message.success("切换分组:" + route.query.groupName)
+        currentGroupId.value = Number(route.query.groupId)
+      }
     }
   })
   GetStockList("").then(result => {
@@ -211,15 +330,168 @@ onBeforeMount(() => {
     sysPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型系统Prompt')
     userPromptOptions.value = promptTemplates.value.filter(item => item.type === '模型用户Prompt')
 
-    //console.log("userPromptOptions",userPromptOptions.value)
-    //console.log("sysPromptOptions",sysPromptOptions.value)
   })
 
+  GetAiConfigs().then(res => {
+    aiConfigs.value = res
+    data.aiConfigId = res[0].ID
+  })
+
+  EventsOn("loadingDone", (data) => {
+    message.loading("刷新股票基础数据...")
+    GetStockList("").then(result => {
+      stockList.value = result
+      options.value = result.map(item => {
+        return {
+          label: item.name + " - " + item.ts_code,
+          value: item.ts_code
+        }
+      })
+    })
+  })
+
+  EventsOn("refresh", (data) => {
+    message.success(data)
+  })
+
+  EventsOn("showSearch", (data) => {
+    addBTN.value = data === 1;
+  })
+
+  EventsOn("stock_price", (data) => {
+    updateData(data)
+  })
+
+  EventsOn("refreshFollowList", (data) => {
+
+    WindowReload()
+  })
+
+  EventsOn("newChatStream", async (msg) => {
+    data.loading = false
+    if (msg === "DONE") {
+      SaveAIResponseResult(data.code, data.name, data.airesult, data.chatId, data.question, data.aiConfigId)
+      message.info("AI分析完成！")
+      message.destroyAll()
+    } else {
+      if (msg.chatId) {
+        data.chatId = msg.chatId
+      }
+      if (msg.question) {
+        data.question = msg.question
+      }
+      if (msg.content) {
+        data.airesult = data.airesult + msg.content
+      }
+      if (msg.extraContent) {
+        data.airesult = data.airesult + msg.extraContent
+      }
+
+    }
+  })
+
+  EventsOn("changeTab", async (msg) => {
+    currentGroupId.value = Number(msg.ID)
+    nextTick(() => {
+      updateTab(currentGroupId.value);
+    });
+  })
+
+
+  EventsOn("updateVersion", async (msg) => {
+    const githubTimeStr = msg.published_at;
+    // 创建一个 Date 对象
+    const utcDate = new Date(githubTimeStr);
+// 获取本地时间
+    const date = new Date(utcDate.getTime());
+    const year = date.getFullYear();
+// getMonth 返回值是 0 - 11，所以要加 1
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+
+    notify.info({
+      avatar: () =>
+          h(NAvatar, {
+            size: 'small',
+            round: false,
+            src: icon.value
+          }),
+      title: '发现新版本: ' + msg.tag_name,
+      content: () => {
+        //return h(MdPreview, {theme:'dark',modelValue:msg.commit?.message}, null)
+        return h('div', {
+          style: {
+            'text-align': 'left',
+            'font-size': '14px',
+          }
+        }, {default: () => msg.commit?.message})
+      },
+      duration: 5000,
+      meta: "发布时间:" + formattedDate,
+      action: () => {
+        return h(NButton, {
+          type: 'primary',
+          size: 'small',
+          onClick: () => {
+            Environment().then(env => {
+              switch (env.platform) {
+                case 'windows':
+                  window.open(msg.html_url)
+                  break
+                default :
+                  OpenURL(msg.html_url)
+              }
+            })
+          }
+        }, {default: () => '查看'})
+      }
+    })
+  })
+
+  EventsOn("warnMsg", async (msg) => {
+    notify.error({
+      avatar: () =>
+          h(NAvatar, {
+            size: 'small',
+            round: false,
+            src: icon.value
+          }),
+      title: '警告',
+      duration: 5000,
+      content: () => {
+        return h('div', {
+          style: {
+            'text-align': 'left',
+            'font-size': '14px',
+          }
+        }, {default: () => msg})
+      },
+    })
+  })
 })
 
 onMounted(() => {
-  message.loading("Loading...")
+  nextTick(() => {
+    initDraggableTabs();
+  });
 
+  // 监听分组列表变化，重新初始化拖拽
+  const unwatch = watch(groupList, () => {
+    nextTick(() => {
+      initDraggableTabs();
+    });
+  });
+
+  // 在组件卸载时清理监听器
+  onBeforeUnmount(() => {
+    unwatch();
+  });
+  message.loading("Loading...")
   GetFollowList(currentGroupId.value).then(result => {
 
     followList.value = result
@@ -237,7 +509,6 @@ onMounted(() => {
     //monitor()
     message.destroyAll()
   })
-
 
   GetVersionInfo().then((res) => {
     icon.value = res.icon;
@@ -264,6 +535,48 @@ onMounted(() => {
     //console.log('WebSocket 连接已关闭');
   };
 })
+// 清理拖拽事件监听器
+// 清理拖拽事件监听器
+function cleanupDraggableTabs() {
+  const tabs = document.querySelectorAll('.n-tabs-tab');
+  tabs.forEach((tab) => {
+    // 移除所有可能的拖拽事件监听器
+    tab.removeEventListener('dragstart', handleTabDragStart);
+    tab.removeEventListener('dragover', handleTabDragOver);
+    tab.removeEventListener('dragenter', handleTabDragEnter);
+    tab.removeEventListener('dragleave', handleTabDragLeave);
+    tab.removeEventListener('drop', handleTabDrop);
+    tab.removeEventListener('dragend', handleTabDragEnd);
+    // 移除draggable属性
+    tab.removeAttribute('draggable');
+  });
+}
+
+// 初始化可拖拽选项卡
+function initDraggableTabs() {
+  // 移除之前可能添加的事件监听器
+  cleanupDraggableTabs();
+
+  // 添加拖拽事件监听器到选项卡元素
+  setTimeout(() => {
+    const tabs = document.querySelectorAll('.n-tabs-tab');
+    tabs.forEach((tab, index) => {
+      const dataIndex = tab.getAttribute('data-name');
+      const name = parseInt(dataIndex);
+
+      // 只为分组标签（name > 0）添加拖拽功能
+      if (name > 0) {
+        tab.setAttribute('draggable', 'true');
+        tab.addEventListener('dragstart', (e) => handleTabDragStart(e, name));
+        tab.addEventListener('dragover', handleTabDragOver);
+        tab.addEventListener('dragenter', (e) => handleTabDragEnter(e, name));
+        tab.addEventListener('dragleave', handleTabDragLeave);
+        tab.addEventListener('drop', handleTabDrop);
+        tab.addEventListener('dragend', handleTabDragEnd);
+      }
+    });
+  }, 100);
+}
 
 onBeforeUnmount(() => {
   // //console.log(`the component is now unmounted.`)
@@ -282,146 +595,9 @@ onBeforeUnmount(() => {
   EventsOff("updateVersion")
   EventsOff("warnMsg")
   EventsOff("loadingDone")
-})
 
-EventsOn("loadingDone", (data) => {
-  message.loading("刷新股票基础数据...")
-  GetStockList("").then(result => {
-    stockList.value = result
-    options.value = result.map(item => {
-      return {
-        label: item.name + " - " + item.ts_code,
-        value: item.ts_code
-      }
-    })
-  })
-})
+  cleanupDraggableTabs()
 
-EventsOn("refresh", (data) => {
-  message.success(data)
-})
-
-EventsOn("showSearch", (data) => {
-  addBTN.value = data === 1;
-})
-
-EventsOn("stock_price", (data) => {
-  updateData(data)
-})
-
-EventsOn("refreshFollowList", (data) => {
-
-  WindowReload()
-})
-
-EventsOn("newChatStream", async (msg) => {
-  ////console.log("newChatStream:->",data.airesult)
-  data.loading = false
-  ////console.log(msg)
-  if (msg === "DONE") {
-    SaveAIResponseResult(data.code, data.name, data.airesult, data.chatId, data.question)
-    message.info("AI分析完成！")
-    message.destroyAll()
-  } else {
-    if (msg.chatId) {
-      data.chatId = msg.chatId
-    }
-    if (msg.question) {
-      data.question = msg.question
-    }
-    if (msg.content) {
-      data.airesult = data.airesult + msg.content
-    }
-    if (msg.extraContent) {
-      data.airesult = data.airesult + msg.extraContent
-    }
-
-  }
-})
-
-EventsOn("changeTab", async (msg) => {
-  //console.log("changeTab",msg)
-  currentGroupId.value = msg.ID
-  updateTab(currentGroupId.value)
-})
-
-
-EventsOn("updateVersion", async (msg) => {
-  const githubTimeStr = msg.published_at;
-  // 创建一个 Date 对象
-  const utcDate = new Date(githubTimeStr);
-// 获取本地时间
-  const date = new Date(utcDate.getTime());
-  const year = date.getFullYear();
-// getMonth 返回值是 0 - 11，所以要加 1
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-
-  const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-
-  //console.log("GitHub UTC 时间:", utcDate);
-  //console.log("转换后的本地时间:", formattedDate);
-  notify.info({
-    avatar: () =>
-        h(NAvatar, {
-          size: 'small',
-          round: false,
-          src: icon.value
-        }),
-    title: '发现新版本: ' + msg.tag_name,
-    content: () => {
-      //return h(MdPreview, {theme:'dark',modelValue:msg.commit?.message}, null)
-      return h('div', {
-        style: {
-          'text-align': 'left',
-          'font-size': '14px',
-        }
-      }, {default: () => msg.commit?.message})
-    },
-    duration: 5000,
-    meta: "发布时间:" + formattedDate,
-    action: () => {
-      return h(NButton, {
-        type: 'primary',
-        size: 'small',
-        onClick: () => {
-          Environment().then(env => {
-            switch (env.platform) {
-              case 'windows':
-                window.open(msg.html_url)
-                break
-              default :
-                OpenURL(msg.html_url)
-            }
-          })
-        }
-      }, {default: () => '查看'})
-    }
-  })
-})
-
-EventsOn("warnMsg", async (msg) => {
-  notify.error({
-    avatar: () =>
-        h(NAvatar, {
-          size: 'small',
-          round: false,
-          src: icon.value
-        }),
-    title: '警告',
-    duration: 5000,
-    content: () => {
-      return h('div', {
-        style: {
-          'text-align': 'left',
-          'font-size': '14px',
-        }
-      }, {default: () => msg})
-    },
-  })
 })
 
 //判断是否是A股交易时间
@@ -442,6 +618,23 @@ function isTradingTime() {
     }
   }
   return false;
+}
+
+// 添加一个获取分组列表的函数，用于处理初始化逻辑
+function fetchGroupList() {
+  InitializeGroupSort().then(initResult => {
+    if (initResult) {
+      GetGroupList().then(result => {
+        groupList.value = result
+        if (route.query.groupId) {
+          message.success("切换分组:" + route.query.groupName)
+          currentGroupId.value = Number(route.query.groupId)
+        }
+      })
+    } else {
+      message.error("初始化分组序号失败")
+    }
+  })
 }
 
 function AddStock() {
@@ -1387,7 +1580,7 @@ function aiReCheckStock(stock, stockCode) {
   //
 
   //message.info("sysPromptId:"+data.sysPromptId)
-  NewChatStream(stock, stockCode, data.question, data.sysPromptId, enableTools.value)
+  NewChatStream(stock, stockCode, data.question, data.aiConfigId, data.sysPromptId, enableTools.value)
 }
 
 function aiCheckStock(stock, stockCode) {
@@ -1491,14 +1684,14 @@ function saveAsImage(name, code) {
 }
 
 async function saveCanvasImage(name) {
-  const element =  document.querySelector('.md-editor-preview'); // 要截图的 DOM 节点
+  const element = document.querySelector('.md-editor-preview'); // 要截图的 DOM 节点
   const canvas = await html2canvas(element)
 
   const dataUrl = canvas.toDataURL('image/png') // base64 格式
   const base64 = dataUrl.replace(/^data:image\/png;base64,/, '')
 
   // 调用 Go 后端保存文件（Wails 绑定方法）
-  await SaveImage(name,base64).then(result => {
+  await SaveImage(name, base64).then(result => {
     message.success(result)
   })
 }
@@ -1560,7 +1753,7 @@ AI赋能股票分析：自选股行情获取，成本盈亏展示，涨跌报警
 `
   // landscape就是横着的，portrait是竖着的，默认是竖屏portrait。
   const blob = await asBlob(value, {orientation: 'portrait'})
-  const { platform } = await Environment()
+  const {platform} = await Environment()
   switch (platform) {
     case 'windows':
       const a = document.createElement('a')
@@ -1572,13 +1765,13 @@ AI赋能股票分析：自选股行情获取，成本盈亏展示，涨跌报警
       a.remove()
       break
     default:
-        const arrayBuffer = await blob.arrayBuffer()
-        const uint8Array = new Uint8Array(arrayBuffer)
-        const binary = uint8Array.reduce((data, byte) => data + String.fromCharCode(byte), '')
-        const base64 = btoa(binary)
-        await SaveWordFile(`${data.name}[${data.code}]-ai-analysis-result.docx`, base64).then(result => {
-          message.success(result)
-        })
+      const arrayBuffer = await blob.arrayBuffer()
+      const uint8Array = new Uint8Array(arrayBuffer)
+      const binary = uint8Array.reduce((data, byte) => data + String.fromCharCode(byte), '')
+      const base64 = btoa(binary)
+      await SaveWordFile(`${data.name}[${data.code}]-ai-analysis-result.docx`, base64).then(result => {
+        message.success(result)
+      })
   }
 }
 
@@ -1641,9 +1834,11 @@ function AddStockGroupInfo(groupId, code, name) {
 
 function updateTab(name) {
   stocks.value = []
-  currentGroupId.value = Number(name)
-  GetFollowList(currentGroupId.value).then(result => {
+  const tabId= Number(name)
+  currentGroupId.value = tabId;
+  GetFollowList(tabId).then(result => {
     followList.value = result
+
     for (const followedStock of result) {
       if (followedStock.StockCode.startsWith("us")) {
         followedStock.StockCode = "gb_" + followedStock.StockCode.replace("us", "").toLowerCase()
@@ -1658,8 +1853,8 @@ function updateTab(name) {
   })
 }
 
-function delTab(name) {
-  let infos = groupList.value = groupList.value.filter(item => item.ID === Number(name))
+function delTab(groupId) {
+  let infos = groupList.value = groupList.value.filter(item => item.ID === Number(groupId))
   dialog.create({
     title: '删除分组',
     type: 'warning',
@@ -1667,7 +1862,7 @@ function delTab(name) {
     positiveText: '确定',
     negativeText: '取消',
     onPositiveClick: () => {
-      RemoveGroup(name).then(result => {
+      RemoveGroup(Number(groupId)).then(result => {
         message.info(result)
         GetGroupList().then(result => {
           groupList.value = result
@@ -1715,9 +1910,10 @@ function searchStockReport(stockCode) {
       </n-gradient-text>
     </template>
   </vue-danmaku>
-  <n-tabs type="card" style="--wails-draggable:drag" animated addable :data-currentGroupId="currentGroupId"
-          :value="currentGroupId" @add="addTab" @update-value="updateTab" placement="top" @close="(key)=>{delTab(key)}">
-    <n-tab-pane :name="0" :tab="'全部'">
+  <n-tabs type="card" style="--wails-draggable:no-drag" animated addable :data-currentGroupId="currentGroupId"
+          :value="String(currentGroupId)" @add="addTab" @update:value="updateTab" placement="top" @close="(key)=>{delTab(key)}">
+
+    <n-tab-pane closable name="0" :tab="'全部'">
       <n-grid :x-gap="8" :cols="3" :y-gap="8">
         <n-gi :id="result['股票代码']+'_gi'" v-for="result in sortedResults" style="margin-left: 2px;">
           <n-card :data-sort="result.sort" :id="result['股票代码']" :data-code="result['股票代码']" :bordered="true"
@@ -1856,7 +2052,7 @@ function searchStockReport(stockCode) {
         </n-gi>
       </n-grid>
     </n-tab-pane>
-    <n-tab-pane closable v-for="group in groupList" :group-id="group.ID" :name="group.ID" :tab="group.name">
+    <n-tab-pane closable v-for="group in groupList" :group-id="group.ID" :name="String(group.ID)" :tab="group.name">
       <n-grid :x-gap="8" :cols="3" :y-gap="8">
         <n-gi :id="result['股票代码']+'_gi'" v-for="result in groupResults" style="margin-left: 2px;">
           <n-card :data-sort="result.sort" :id="result['股票代码']" :data-code="result['股票代码']" :bordered="true"
@@ -2003,6 +2199,7 @@ function searchStockReport(stockCode) {
       </n-grid>
     </n-tab-pane>
   </n-tabs>
+
   <div style="position: fixed;bottom: 18px;right:5px;z-index: 10;width: 400px">
     <!--    <n-card :bordered="false">-->
     <n-input-group>
@@ -2161,9 +2358,11 @@ function searchStockReport(stockCode) {
         </n-gradient-text>
       </n-flex>
       <n-flex justify="space-between" style="margin-bottom: 10px">
-        <n-select style="width: 49%" v-model:value="data.sysPromptId" label-field="name" value-field="ID"
+        <n-select style="width: 31%" v-model:value="data.aiConfigId" label-field="name" value-field="ID"
+                  :options="aiConfigs" placeholder="请选择AI模型服务配置"/>
+        <n-select style="width: 31%" v-model:value="data.sysPromptId" label-field="name" value-field="ID"
                   :options="sysPromptOptions" placeholder="请选择系统提示词"/>
-        <n-select style="width: 49%" v-model:value="data.question" label-field="name" value-field="content"
+        <n-select style="width: 31%" v-model:value="data.question" label-field="name" value-field="content"
                   :options="userPromptOptions" placeholder="请选择用户提示词"/>
       </n-flex>
       <n-flex justify="right">
@@ -2217,5 +2416,39 @@ function searchStockReport(stockCode) {
   100% {
     border-color: red;
   }
+}
+
+/* 所有标签的通用样式 */
+:deep(.n-tabs-nav .n-tabs-tab) {
+  position: relative;
+  cursor: pointer;
+}
+
+/* 可拖拽标签的样式 */
+:deep(.n-tabs-nav .n-tabs-tab[draggable="true"]) {
+  user-select: none;
+  cursor: move;
+}
+
+.tab-drag-over {
+  background-color: #e6f7ff !important;
+  border: 2px dashed #1890ff !important;
+  transform: scale(1.02);
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.tab-drag-over::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+}
+
+.tab-dragging {
+  opacity: 0.5;
 }
 </style>

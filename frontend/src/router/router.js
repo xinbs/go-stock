@@ -5,6 +5,7 @@ import settingsView from '../components/settings.vue'
 import aboutView from "../components/about.vue";
 import fundView from "../components/fund.vue";
 import marketView from "../components/market.vue";
+import agentChat from "../components/agent-chat.vue"
 
 const routes = [
     { path: '/', component: stockView,name: 'stock'},
@@ -12,7 +13,7 @@ const routes = [
     { path: '/settings', component: settingsView,name: 'settings' },
     { path: '/about', component: aboutView,name: 'about' },
     { path: '/market', component: marketView,name: 'market' },
-
+    { path: '/agent', component: agentChat,name: 'agent' },
 ]
 
 const router = createRouter({

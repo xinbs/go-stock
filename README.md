@@ -10,8 +10,9 @@
 ![扫码_搜索联合传播样式-白色版.png](build/screenshot/%E6%89%AB%E7%A0%81_%E6%90%9C%E7%B4%A2%E8%81%94%E5%90%88%E4%BC%A0%E6%92%AD%E6%A0%B7%E5%BC%8F-%E7%99%BD%E8%89%B2%E7%89%88.png)
 
 ### 📈 交流群
-- QQ交流群2：[点击链接加入群聊【go-stock交流群2】：892666282](https://qm.qq.com/q/5mYiy6Yxh0)
-- QQ交流群：[点击链接加入群聊【go-stock交流群】：491605333(已满会定期清理，随缘入群)](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=0YQ8qD3exahsD4YLNhzQTWe5ssstWC89&authKey=usOMMRFtIQDC%2FYcatHYapcxQbJ7PwXPHK9OypTXWzNjAq%2FRVvQu9bj2lRgb%2BSZ3p&noverify=0&group_code=491605333)
+
+[//]: # (- QQ交流群2：[点击链接加入群聊【go-stock交流群2】：892666282]&#40;https://qm.qq.com/q/5mYiy6Yxh0&#41;)
+- QQ交流群：[点击链接加入群聊【go-stock交流群】：491605333(定期清理，随缘入群)](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=0YQ8qD3exahsD4YLNhzQTWe5ssstWC89&authKey=usOMMRFtIQDC%2FYcatHYapcxQbJ7PwXPHK9OypTXWzNjAq%2FRVvQu9bj2lRgb%2BSZ3p&noverify=0&group_code=491605333)
 
 ###  ✨ 简介
 - 本项目基于Wails和NaiveUI开发，结合AI大模型构建的股票分析工具。
@@ -24,21 +25,24 @@
 - 安装版：[go-stock-amd64-installer.exe](https://github.com/ArvinLovegood/go-stock/releases)
 - 绿色版：[go-stock-windows-amd64.exe](https://github.com/ArvinLovegood/go-stock/releases)
 - MACOS绿色版：[go-stock-darwin-universal](https://github.com/ArvinLovegood/go-stock/releases)
-- MACOS安装版：[go-stock-darwin-universal.pkg](https://github.com/ArvinLovegood/go-stock/releases)
+
+[//]: # (- MACOS安装版：[go-stock-darwin-universal.pkg]&#40;https://github.com/ArvinLovegood/go-stock/releases&#41;)
 
 
 ### 💬 支持大模型/平台
-| 模型 | 状态 | 备注                                                                                                                                                            |
-| --- | --- |---------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [OpenAI](https://platform.openai.com/) | ✅ | 可接入任何 OpenAI 接口格式模型                                                                                                                                           |
-| [Ollama](https://ollama.com/) | ✅ | 本地大模型运行平台                                                                                                                                                     |
-| [LMStudio](https://lmstudio.ai/) | ✅ | 本地大模型运行平台                                                                                                                                                     |
-| [AnythingLLM](https://anythingllm.com/) | ✅ | 本地知识库                                                                                                                                                         |
-| [DeepSeek](https://www.deepseek.com/) | ✅ | deepseek-reasoner,deepseek-chat                                                                                                                               |
-| [大模型聚合平台](https://cloud.siliconflow.cn/i/foufCerk) | ✅ | 如：[硅基流动](https://cloud.siliconflow.cn/i/foufCerk)，[火山方舟](https://www.volcengine.com/experience/ark?utm_term=202502dsinvite&ac=DSASUQY5&rc=IJSE43PZ) ,[优云智算](https://www.compshare.cn/image-community?ytag=GPU_YY-gh_gostock) |
+| 模型 | 状态 | 备注                                                                                                                                                                                                                                                                |
+| --- | --- |-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [OpenAI](https://platform.openai.com/) | ✅ | 可接入任何 OpenAI 接口格式模型                                                                                                                                                                                                                                               |
+| [Ollama](https://ollama.com/) | ✅ | 本地大模型运行平台                                                                                                                                                                                                                                                         |
+| [LMStudio](https://lmstudio.ai/) | ✅ | 本地大模型运行平台                                                                                                                                                                                                                                                         |
+| [AnythingLLM](https://anythingllm.com/) | ✅ | 本地知识库                                                                                                                                                                                                                                                             |
+| [DeepSeek](https://www.deepseek.com/) | ✅ | deepseek-reasoner,deepseek-chat                                                                                                                                                                                                                                   |
+| [大模型聚合平台](https://cloud.siliconflow.cn/i/foufCerk) | ✅ | 如：[302.AI](https://share.302.ai/1KUpfG)，[硅基流动](https://cloud.siliconflow.cn/i/foufCerk)，[火山方舟](https://www.volcengine.com/experience/ark?utm_term=202502dsinvite&ac=DSASUQY5&rc=IJSE43PZ) |
 
 ### <span style="color: #568DF4;">各位亲爱的朋友们，如果您对这个项目感兴趣，请先给我一个<i style="color: #EA2626;">star</i>吧，谢谢！</span>💕
-- 优云智算（by UCloud）：万卡规模4090免费用10小时，新人注册另增50万tokens，海量热门源项目镜像一键部署，[注册链接](https://www.compshare.cn/image-community?ytag=GPU_YY-gh_gostock)
+- 302.AI：新用户使用邀请码注册，即可领取 $1 测试额度！[注册链接](https://share.302.ai/1KUpfG)
+
+[//]: # (- 优云智算（by UCloud）：万卡规模4090免费用10小时，新人注册另增50万tokens，海量热门源项目镜像一键部署，[注册链接]&#40;https://www.compshare.cn/image-community?ytag=GPU_YY-gh_gostock&#41;)
 - 火山方舟：新用户每个模型注册即送50万tokens，[注册链接](https://www.volcengine.com/experience/ark?utm_term=202502dsinvite&ac=DSASUQY5&rc=IJSE43PZ)
 - 硅基流动(siliconflow)，注册即送2000万Tokens，[注册链接](https://cloud.siliconflow.cn/i/foufCerk)
 - Tushare大数据开放社区,免费提供各类金融数据,助力行业和量化研究(注意：Tushare只需要120积分即可，注册完成个人资料补充即可得120积分！！！)，[注册链接](https://tushare.pro/register?reg=701944)
@@ -58,7 +62,7 @@
 | 功能说明            | 状态 | 备注                                                                                                       |
 |-----------------|----|----------------------------------------------------------------------------------------------------------|
 | 股票分析知识库         | 🚧 | 未来计划                                                                                                     |
-| Ai智能选股          | 🚧 | Ai智能选股功能开发中(下半年重点开发计划)                                                                                   |
+| Ai智能选股          | ✅ | Ai智能选股功能(市场行情-》AI总结/AI智能体功能)                                                                             |
 | ETF支持           | 🚧 | ETF数据支持 (目前可以查看净值和估值)                                                                                    |
 | 美股支持            | ✅  | 美股数据支持                                                                                                   |
 | 港股支持            | ✅  | 港股数据支持                                                                                                   |

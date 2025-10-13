@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"go-stock/backend/db"
+	log "go-stock/backend/logger"
 	"testing"
 )
 
@@ -28,7 +29,7 @@ func TestNewDeepSeekOpenAiConfig(t *testing.T) {
 		},
 	})
 
-	ai := NewDeepSeekOpenAi(context.TODO())
+	ai := NewDeepSeekOpenAi(context.TODO(), 1)
 	//res := ai.NewChatStream("长电科技", "sh600584", "长电科技分析和总结", nil)
 	res := ai.NewSummaryStockNewsStreamWithTools("总结市场资讯，发掘潜力标的/行业/板块/概念，控制风险。调用工具函数验证", nil, tools)
 
@@ -52,8 +53,17 @@ func TestGetTopNewsList(t *testing.T) {
 
 func TestSearchGuShiTongStockInfo(t *testing.T) {
 	db.Init("../../data/stock.db")
-	SearchGuShiTongStockInfo("hk01810", 60)
-	SearchGuShiTongStockInfo("sh600745", 60)
-	SearchGuShiTongStockInfo("gb_goog", 60)
+	//SearchGuShiTongStockInfo("hk01810", 60)
+	msgs := SearchGuShiTongStockInfo("sh600745", 60)
+	for _, msg := range *msgs {
+		log.SugaredLogger.Infof("%s", msg)
+	}
+	//SearchGuShiTongStockInfo("gb_goog", 60)
 
+}
+
+func TestGetZSInfo(t *testing.T) {
+	db.Init("../../data/stock.db")
+	GetZSInfo("中证银行", "sz399986", 30)
+	GetZSInfo("上海贝岭", "sh600171", 30)
 }

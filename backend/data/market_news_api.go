@@ -4,6 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go-stock/backend/db"
+	"go-stock/backend/logger"
+	"go-stock/backend/models"
+	"go-stock/backend/util"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/PuerkitoBio/goquery"
 	"github.com/coocood/freecache"
 	"github.com/duke-git/lancet/v2/convertor"
@@ -12,12 +20,6 @@ import (
 	"github.com/robertkrimen/otto"
 	"github.com/samber/lo"
 	"github.com/tidwall/gjson"
-	"go-stock/backend/db"
-	"go-stock/backend/logger"
-	"go-stock/backend/models"
-	"strconv"
-	"strings"
-	"time"
 )
 
 // @Author spark
@@ -36,7 +38,7 @@ func (m MarketNewsApi) GetNewTelegraph(crawlTimeOut int64) *[]models.Telegraph {
 	response, _ := resty.New().SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
 		SetHeader("Referer", "https://www.cls.cn/").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
-		Get(fmt.Sprintf(url))
+		Get(url)
 	var telegraphs []models.Telegraph
 	//logger.SugaredLogger.Info(string(response.Body()))
 	document, _ := goquery.NewDocumentFromReader(strings.NewReader(string(response.Body())))
@@ -115,6 +117,27 @@ func (m MarketNewsApi) GetNewsList(source string, limit int) *[]*models.Telegrap
 	}
 	return news
 }
+func (m MarketNewsApi) GetNewsList2(source string, limit int) *[]*models.Telegraph {
+	news := &[]*models.Telegraph{}
+	if source != "" {
+		db.Dao.Model(news).Preload("TelegraphTags").Where("source=?", source).Order("id desc,is_red desc").Limit(limit).Find(news)
+	} else {
+		db.Dao.Model(news).Preload("TelegraphTags").Order("id desc,is_red desc").Limit(limit).Find(news)
+	}
+	for _, item := range *news {
+		tags := &[]models.Tags{}
+		db.Dao.Model(&models.Tags{}).Where("id in ?", lo.Map(item.TelegraphTags, func(item models.TelegraphTags, index int) uint {
+			return item.TagId
+		})).Find(&tags)
+		tagNames := lo.Map(*tags, func(item models.Tags, index int) string {
+			return item.Name
+		})
+		item.SubjectTags = tagNames
+		logger.SugaredLogger.Infof("tagNames %v ，SubjectTags：%s", tagNames, item.SubjectTags)
+	}
+	return news
+}
+
 func (m MarketNewsApi) GetTelegraphList(source string) *[]*models.Telegraph {
 	news := &[]*models.Telegraph{}
 	if source != "" {
@@ -550,9 +573,14 @@ func (m MarketNewsApi) EMDictCode(code string, cache *freecache.Cache) []any {
 }
 
 func (m MarketNewsApi) TradingViewNews() *[]models.TVNews {
+	client := resty.New()
+	config := GetSettingConfig()
+	if config.HttpProxyEnabled && config.HttpProxy != "" {
+		client.SetProxy(config.HttpProxy)
+	}
 	TVNews := &[]models.TVNews{}
 	url := "https://news-mediator.tradingview.com/news-flow/v2/news?filter=lang:zh-Hans&filter=provider:panews,reuters&client=screener&streaming=false"
-	resp, err := resty.New().SetProxy("http://127.0.0.1:10809").SetTimeout(time.Duration(30)*time.Second).R().
+	resp, err := client.SetTimeout(time.Duration(5)*time.Second).R().
 		SetHeader("Host", "news-mediator.tradingview.com").
 		SetHeader("Origin", "https://cn.tradingview.com").
 		SetHeader("Referer", "https://cn.tradingview.com/").
@@ -748,27 +776,27 @@ func (m MarketNewsApi) GetCPI() *models.CPIResp {
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("GDP err:%s", err.Error())
+		logger.SugaredLogger.Errorf("GetCPI err:%s", err.Error())
 		return res
 	}
 	body := resp.Body()
-	logger.SugaredLogger.Debugf("GDP:%s", body)
+	logger.SugaredLogger.Debugf("GetCPI:%s", body)
 	vm := otto.New()
 	vm.Run("function data(res){return res};")
 
 	val, err := vm.Run(body)
 	if err != nil {
-		logger.SugaredLogger.Errorf("GDP err:%s", err.Error())
+		logger.SugaredLogger.Errorf("GetCPI err:%s", err.Error())
 		return res
 	}
 	data, _ := val.Object().Value().Export()
-	logger.SugaredLogger.Infof("GDP:%v", data)
+	logger.SugaredLogger.Infof("GetCPI:%v", data)
 	marshal, err := json.Marshal(data)
 	if err != nil {
 		return res
 	}
 	json.Unmarshal(marshal, &res)
-	logger.SugaredLogger.Infof("GDP:%+v", res)
+	logger.SugaredLogger.Infof("GetCPI:%+v", res)
 	return res
 }
 
@@ -783,7 +811,7 @@ func (m MarketNewsApi) GetPPI() *models.PPIResp {
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
 		Get(url)
 	if err != nil {
-		logger.SugaredLogger.Errorf("GDP err:%s", err.Error())
+		logger.SugaredLogger.Errorf("GetPPI err:%s", err.Error())
 		return res
 	}
 	body := resp.Body()
@@ -831,4 +859,103 @@ func (m MarketNewsApi) GetPMI() *models.PMIResp {
 	json.Unmarshal(marshal, &res)
 	return res
 
+}
+func (m MarketNewsApi) GetIndustryReportInfo(infoCode string) string {
+	url := "https://data.eastmoney.com/report/zw_industry.jshtml?infocode=" + infoCode
+	resp, err := resty.New().SetTimeout(time.Duration(30)*time.Second).R().
+		SetHeader("Host", "data.eastmoney.com").
+		SetHeader("Origin", "https://data.eastmoney.com").
+		SetHeader("Referer", "https://data.eastmoney.com/report/industry.jshtml").
+		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
+		Get(url)
+	if err != nil {
+		logger.SugaredLogger.Errorf("GetIndustryReportInfo err:%s", err.Error())
+		return ""
+	}
+	body := resp.Body()
+	//logger.SugaredLogger.Debugf("GetIndustryReportInfo:%s", body)
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
+	title, _ := doc.Find("div.c-title").Html()
+	content, _ := doc.Find("div.ctx-content").Html()
+	//logger.SugaredLogger.Infof("GetIndustryReportInfo:\n%s\n%s", title, content)
+	markdown, err := util.HTMLToMarkdown(title + content)
+	if err != nil {
+		return ""
+	}
+	logger.SugaredLogger.Infof("GetIndustryReportInfo markdown:\n%s", markdown)
+	return markdown
+}
+
+func (m MarketNewsApi) ReutersNew() *models.ReutersNews {
+	client := resty.New()
+	config := GetSettingConfig()
+	if config.HttpProxyEnabled && config.HttpProxy != "" {
+		client.SetProxy(config.HttpProxy)
+	}
+	news := &models.ReutersNews{}
+	url := "https://www.reuters.com/pf/api/v3/content/fetch/articles-by-section-alias-or-id-v1?query={\"arc-site\":\"reuters\",\"fetch_type\":\"collection\",\"offset\":0,\"section_id\":\"/world/\",\"size\":9,\"uri\":\"/world/\",\"website\":\"reuters\"}&d=300&mxId=00000000&_website=reuters"
+	_, err := client.SetTimeout(time.Duration(5)*time.Second).R().
+		SetHeader("Host", "www.reuters.com").
+		SetHeader("Origin", "https://www.reuters.com").
+		SetHeader("Referer", "https://www.reuters.com/world/china/").
+		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0").
+		SetResult(news).
+		Get(url)
+	if err != nil {
+		logger.SugaredLogger.Errorf("ReutersNew err:%s", err.Error())
+		return news
+	}
+	logger.SugaredLogger.Infof("Articles:%+v", news.Result.Articles)
+	return news
+}
+
+func (m MarketNewsApi) InteractiveAnswer(page int, pageSize int, keyWord string) *models.InteractiveAnswer {
+	client := resty.New()
+	config := GetSettingConfig()
+	if config.HttpProxyEnabled && config.HttpProxy != "" {
+		client.SetProxy(config.HttpProxy)
+	}
+	url := fmt.Sprintf("https://irm.cninfo.com.cn/newircs/index/search?_t=%d", time.Now().Unix())
+	answers := &models.InteractiveAnswer{}
+	logger.SugaredLogger.Infof("请求url:%s", url)
+	resp, err := client.SetTimeout(time.Duration(5)*time.Second).R().
+		SetHeader("Host", "irm.cninfo.com.cn").
+		SetHeader("Origin", "https://irm.cninfo.com.cn").
+		SetHeader("Referer", "https://irm.cninfo.com.cn/views/interactiveAnswer").
+		SetHeader("handleError", "true").
+		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0").
+		SetFormData(map[string]string{
+			"pageNo":      convertor.ToString(page),
+			"pageSize":    convertor.ToString(pageSize),
+			"searchTypes": "11",
+			"highLight":   "true",
+			"keyWord":     keyWord,
+		}).
+		SetResult(answers).
+		Post(url)
+	if err != nil {
+		logger.SugaredLogger.Errorf("InteractiveAnswer-err:%+v", err)
+	}
+	logger.SugaredLogger.Debugf("InteractiveAnswer-resp:%s", resp.Body())
+	return answers
+
+}
+
+func (m MarketNewsApi) CailianpressWeb(searchWords string) *models.CailianpressWeb {
+	res := &models.CailianpressWeb{}
+	_, err := resty.New().SetTimeout(time.Second*10).R().
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Host", "www.cls.cn").
+		SetHeader("Origin", "https://www.cls.cn").
+		SetHeader("Referer", "https://www.cls.cn/telegraph").
+		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
+		SetBody(fmt.Sprintf(`{"app":"CailianpressWeb","os":"web","sv":"8.4.6","category":"","keyword":"%s"}`, searchWords)).
+		SetResult(res).
+		Post("https://www.cls.cn/api/csw?app=CailianpressWeb&os=web&sv=8.4.6&sign=9f8797a1f4de66c2370f7a03990d2737")
+	if err != nil {
+		return nil
+	}
+	logger.SugaredLogger.Debug(res)
+
+	return res
 }

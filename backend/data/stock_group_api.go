@@ -39,16 +39,73 @@ func NewStockGroupApi(dao *gorm.DB) *StockGroupApi {
 }
 
 func (receiver StockGroupApi) AddGroup(group Group) bool {
-	err := receiver.dao.Where("name = ?", group.Name).FirstOrCreate(&group).Updates(&Group{
-		Name: group.Name,
-		Sort: group.Sort,
-	}).Error
+	// 检查是否已存在相同sort的组
+	var existingGroup Group
+	err := receiver.dao.Where("sort = ?", group.Sort).First(&existingGroup).Error
+
+	// 如果存在相同sort的组，则将该组及之后的所有组向后移动一位
+	if err == nil {
+		// 处理sort冲突：将相同sort值及之后的所有组向后移动一位
+		receiver.dao.Model(&Group{}).Where("sort >= ?", group.Sort).Update("sort", gorm.Expr("sort + ?", 1))
+	}
+
+	// 创建新组
+	err = receiver.dao.Create(&group).Error
 	return err == nil
 }
 func (receiver StockGroupApi) GetGroupList() []Group {
 	var groups []Group
-	receiver.dao.Find(&groups)
+	receiver.dao.Order("sort ASC").Find(&groups)
 	return groups
+}
+func (receiver StockGroupApi) UpdateGroupSort(id int, newSort int) bool {
+	// First, get the current group to check if it exists
+	var currentGroup Group
+	if err := receiver.dao.First(&currentGroup, id).Error; err != nil {
+		return false
+	}
+
+	// If the new sort is the same as current, no need to update
+	if currentGroup.Sort == newSort {
+		return true
+	}
+
+	// Get all groups ordered by sort
+	var allGroups []Group
+	receiver.dao.Order("sort ASC").Find(&allGroups)
+
+	// Adjust sort numbers to make space for the new sort value
+	if newSort > currentGroup.Sort {
+		// Moving down: decrease sort of groups between old and new position
+		receiver.dao.Model(&Group{}).Where("sort > ? AND sort <= ? AND id != ?", currentGroup.Sort, newSort, id).Update("sort", gorm.Expr("sort - ?", 1))
+	} else {
+		// Moving up: increase sort of groups between new and old position
+		receiver.dao.Model(&Group{}).Where("sort >= ? AND sort < ? AND id != ?", newSort, currentGroup.Sort, id).Update("sort", gorm.Expr("sort + ?", 1))
+	}
+
+	// Update the target group's sort
+	err := receiver.dao.Model(&Group{}).Where("id = ?", id).Update("sort", newSort).Error
+	return err == nil
+}
+
+// InitializeGroupSort initializes sort order for all groups based on created time
+func (receiver StockGroupApi) InitializeGroupSort() bool {
+	// Get all groups ordered by created time
+	var groups []Group
+	err := receiver.dao.Order("created_at ASC").Find(&groups).Error
+	if err != nil {
+		return false
+	}
+
+	// Update each group with new sort value based on their position
+	for i, group := range groups {
+		newSort := i + 1
+		err := receiver.dao.Model(&Group{}).Where("id = ?", group.ID).Update("sort", newSort).Error
+		if err != nil {
+			return false
+		}
+	}
+	return true
 }
 func (receiver StockGroupApi) GetGroupStockByGroupId(groupId int) []GroupStock {
 	var stockGroup []GroupStock

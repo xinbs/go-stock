@@ -6,14 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/PuerkitoBio/goquery"
-	"github.com/chromedp/chromedp"
-	"github.com/duke-git/lancet/v2/convertor"
-	"github.com/duke-git/lancet/v2/random"
-	"github.com/duke-git/lancet/v2/strutil"
-	"github.com/go-resty/resty/v2"
-	"github.com/tidwall/gjson"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go-stock/backend/db"
 	"go-stock/backend/logger"
 	"go-stock/backend/models"
@@ -21,6 +13,16 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/chromedp/chromedp"
+	"github.com/duke-git/lancet/v2/convertor"
+	"github.com/duke-git/lancet/v2/random"
+	"github.com/duke-git/lancet/v2/strutil"
+	"github.com/go-resty/resty/v2"
+	"github.com/samber/lo"
+	"github.com/tidwall/gjson"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // @Author spark
@@ -47,33 +49,41 @@ func (o OpenAi) String() string {
 		o.BaseUrl, o.Model, o.MaxTokens, o.Temperature, o.Prompt, o.TimeOut, o.QuestionTemplate, o.CrawlTimeOut, o.KDays, o.BrowserPath)
 }
 
-func NewDeepSeekOpenAi(ctx context.Context) *OpenAi {
-	config := GetConfig()
-	if config.OpenAiEnable {
-		if config.OpenAiApiTimeOut <= 0 {
-			config.OpenAiApiTimeOut = 60 * 5
+func NewDeepSeekOpenAi(ctx context.Context, aiConfigId int) *OpenAi {
+	settingConfig := GetSettingConfig()
+	aiConfig, find := lo.Find(settingConfig.AiConfigs, func(item *AIConfig) bool {
+		return uint(aiConfigId) == item.ID
+	})
+	if !find {
+		aiConfig = &AIConfig{}
+	}
+
+	if settingConfig.OpenAiEnable {
+		if aiConfig.TimeOut <= 0 {
+			aiConfig.TimeOut = 60 * 5
 		}
-		if config.CrawlTimeOut <= 0 {
-			config.CrawlTimeOut = 60
+		if settingConfig.CrawlTimeOut <= 0 {
+			settingConfig.CrawlTimeOut = 60
 		}
-		if config.KDays < 30 {
-			config.KDays = 120
+		if settingConfig.KDays < 30 {
+			settingConfig.KDays = 120
 		}
 	}
-	return &OpenAi{
+	o := &OpenAi{
 		ctx:              ctx,
-		BaseUrl:          config.OpenAiBaseUrl,
-		ApiKey:           config.OpenAiApiKey,
-		Model:            config.OpenAiModelName,
-		MaxTokens:        config.OpenAiMaxTokens,
-		Temperature:      config.OpenAiTemperature,
-		Prompt:           config.Prompt,
-		TimeOut:          config.OpenAiApiTimeOut,
-		QuestionTemplate: config.QuestionTemplate,
-		CrawlTimeOut:     config.CrawlTimeOut,
-		KDays:            config.KDays,
-		BrowserPath:      config.BrowserPath,
+		BaseUrl:          aiConfig.BaseUrl,
+		ApiKey:           aiConfig.ApiKey,
+		Model:            aiConfig.ModelName,
+		MaxTokens:        aiConfig.MaxTokens,
+		Temperature:      aiConfig.Temperature,
+		TimeOut:          aiConfig.TimeOut,
+		Prompt:           settingConfig.Prompt,
+		QuestionTemplate: settingConfig.QuestionTemplate,
+		CrawlTimeOut:     settingConfig.CrawlTimeOut,
+		KDays:            settingConfig.KDays,
+		BrowserPath:      settingConfig.BrowserPath,
 	}
+	return o
 }
 
 type THSTokenResponse struct {
@@ -135,7 +145,7 @@ type ToolFunction struct {
 	Parameters  FunctionParameters `json:"parameters"`
 }
 
-func (o OpenAi) NewSummaryStockNewsStreamWithTools(userQuestion string, sysPromptId *int, tools []Tool) <-chan map[string]any {
+func (o *OpenAi) NewSummaryStockNewsStreamWithTools(userQuestion string, sysPromptId *int, tools []Tool) <-chan map[string]any {
 	ch := make(chan map[string]any, 512)
 	defer func() {
 		if err := recover(); err != nil {
@@ -179,7 +189,21 @@ func (o OpenAi) NewSummaryStockNewsStreamWithTools(userQuestion string, sysPromp
 			"content": "当前本地时间是:" + time.Now().Format("2006-01-02 15:04:05"),
 		})
 		wg := &sync.WaitGroup{}
-		wg.Add(3)
+		wg.Add(6)
+
+		go func() {
+			defer wg.Done()
+			datas := NewMarketNewsApi().InteractiveAnswer(1, 100, "")
+			content := util.MarkdownTableWithTitle("当前最新投资者互动数据", datas.Results)
+			msg = append(msg, map[string]interface{}{
+				"role":    "user",
+				"content": "投资者互动数据",
+			})
+			msg = append(msg, map[string]interface{}{
+				"role":    "assistant",
+				"content": content,
+			})
+		}()
 
 		go func() {
 			defer wg.Done()
@@ -210,17 +234,24 @@ func (o OpenAi) NewSummaryStockNewsStreamWithTools(userQuestion string, sysPromp
 		go func() {
 			defer wg.Done()
 			var market strings.Builder
-			market.WriteString(getZSInfo("创业板指数", "sz399006", 30) + "\n")
-			market.WriteString(getZSInfo("上证综合指数", "sh000001", 30) + "\n")
-			market.WriteString(getZSInfo("沪深300指数", "sh000300", 30) + "\n")
+			market.WriteString(GetZSInfo("上证指数", "sh000001", 30) + "\n")
+			market.WriteString(GetZSInfo("深证成指", "sz399001", 30) + "\n")
+			market.WriteString(GetZSInfo("创业板指数", "sz399006", 30) + "\n")
+			market.WriteString(GetZSInfo("科创50", "sh000688", 30) + "\n")
+			market.WriteString(GetZSInfo("沪深300指数", "sh000300", 30) + "\n")
+			market.WriteString(GetZSInfo("中证银行", "sz399986", 30) + "\n")
+			market.WriteString(GetZSInfo("科创芯片", "sh000685", 30) + "\n")
+			market.WriteString(GetZSInfo("上证医药", "sh000037", 30) + "\n")
+			market.WriteString(GetZSInfo("证券龙头", "sz399437", 30) + "\n")
+			market.WriteString(GetZSInfo("中证白酒", "sz399997", 30) + "\n")
 			//logger.SugaredLogger.Infof("NewChatStream getZSInfo=\n%s", market.String())
 			msg = append(msg, map[string]interface{}{
 				"role":    "user",
-				"content": "当前市场指数行情",
+				"content": "当前市场/大盘/行业/指数行情",
 			})
 			msg = append(msg, map[string]interface{}{
 				"role":    "assistant",
-				"content": "当前市场指数行情情况如下：\n" + market.String(),
+				"content": "当前市场/大盘/行业/指数行情如下：\n" + market.String(),
 			})
 		}()
 
@@ -255,9 +286,45 @@ func (o OpenAi) NewSummaryStockNewsStreamWithTools(userQuestion string, sysPromp
 
 		}()
 
+		go func() {
+			defer wg.Done()
+			resp := NewMarketNewsApi().TradingViewNews()
+			var newsText strings.Builder
+
+			for _, a := range *resp {
+				logger.SugaredLogger.Debugf("TradingViewNews: %s", a.Title)
+				newsText.WriteString(a.Title + "\n")
+			}
+			msg = append(msg, map[string]interface{}{
+				"role":    "user",
+				"content": "全球新闻资讯",
+			})
+			msg = append(msg, map[string]interface{}{
+				"role":    "assistant",
+				"content": newsText.String(),
+			})
+		}()
+
+		go func() {
+			defer wg.Done()
+			news := NewMarketNewsApi().ReutersNew()
+			messageText := strings.Builder{}
+			for _, article := range news.Result.Articles {
+				messageText.WriteString("## " + article.Title + "\n")
+				messageText.WriteString("### " + article.Description + "\n")
+			}
+			msg = append(msg, map[string]interface{}{
+				"role":    "user",
+				"content": "外媒全球新闻资讯",
+			})
+			msg = append(msg, map[string]interface{}{
+				"role":    "assistant",
+				"content": messageText.String(),
+			})
+		}()
 		wg.Wait()
 
-		news := NewMarketNewsApi().GetNewsList("财联社电报", random.RandInt(50, 150))
+		news := NewMarketNewsApi().GetNewsList2("财联社电报", random.RandInt(100, 500))
 		messageText := strings.Builder{}
 		for _, telegraph := range *news {
 			messageText.WriteString("## " + telegraph.Time + ":" + "\n")
@@ -285,7 +352,7 @@ func (o OpenAi) NewSummaryStockNewsStreamWithTools(userQuestion string, sysPromp
 	return ch
 }
 
-func (o OpenAi) NewSummaryStockNewsStream(userQuestion string, sysPromptId *int) <-chan map[string]any {
+func (o *OpenAi) NewSummaryStockNewsStream(userQuestion string, sysPromptId *int) <-chan map[string]any {
 	ch := make(chan map[string]any, 512)
 	defer func() {
 		if err := recover(); err != nil {
@@ -329,13 +396,20 @@ func (o OpenAi) NewSummaryStockNewsStream(userQuestion string, sysPromptId *int)
 			"content": "当前本地时间是:" + time.Now().Format("2006-01-02 15:04:05"),
 		})
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
+		wg.Add(4)
 		go func() {
 			defer wg.Done()
 			var market strings.Builder
-			market.WriteString(getZSInfo("创业板指数", "sz399006", 30) + "\n")
-			market.WriteString(getZSInfo("上证综合指数", "sh000001", 30) + "\n")
-			market.WriteString(getZSInfo("沪深300指数", "sh000300", 30) + "\n")
+			market.WriteString(GetZSInfo("上证指数", "sh000001", 30) + "\n")
+			market.WriteString(GetZSInfo("深证成指", "sz399001", 30) + "\n")
+			market.WriteString(GetZSInfo("创业板指数", "sz399006", 30) + "\n")
+			market.WriteString(GetZSInfo("科创50", "sh000688", 30) + "\n")
+			market.WriteString(GetZSInfo("沪深300指数", "sh000300", 30) + "\n")
+			market.WriteString(GetZSInfo("中证银行", "sz399986", 30) + "\n")
+			market.WriteString(GetZSInfo("科创芯片", "sh000685", 30) + "\n")
+			market.WriteString(GetZSInfo("上证医药", "sh000037", 30) + "\n")
+			market.WriteString(GetZSInfo("证券龙头", "sz399437", 30) + "\n")
+			market.WriteString(GetZSInfo("中证白酒", "sz399997", 30) + "\n")
 			//logger.SugaredLogger.Infof("NewChatStream getZSInfo=\n%s", market.String())
 			msg = append(msg, map[string]interface{}{
 				"role":    "user",
@@ -346,9 +420,60 @@ func (o OpenAi) NewSummaryStockNewsStream(userQuestion string, sysPromptId *int)
 				"content": "当前市场指数行情情况如下：\n" + market.String(),
 			})
 		}()
+		go func() {
+			defer wg.Done()
+			resp := NewMarketNewsApi().TradingViewNews()
+			var newsText strings.Builder
+
+			for _, a := range *resp {
+				logger.SugaredLogger.Debugf("TradingViewNews: %s", a.Title)
+				newsText.WriteString(a.Title + "\n")
+			}
+			msg = append(msg, map[string]interface{}{
+				"role":    "user",
+				"content": "外媒全球新闻资讯",
+			})
+			msg = append(msg, map[string]interface{}{
+				"role":    "assistant",
+				"content": newsText.String(),
+			})
+		}()
+
+		go func() {
+			defer wg.Done()
+			news := NewMarketNewsApi().ReutersNew()
+			messageText := strings.Builder{}
+			for _, article := range news.Result.Articles {
+				messageText.WriteString("## " + article.Title + "\n")
+				messageText.WriteString("### " + article.Description + "\n")
+			}
+			msg = append(msg, map[string]interface{}{
+				"role":    "user",
+				"content": "外媒全球新闻资讯",
+			})
+			msg = append(msg, map[string]interface{}{
+				"role":    "assistant",
+				"content": messageText.String(),
+			})
+		}()
+
+		go func() {
+			defer wg.Done()
+			datas := NewMarketNewsApi().InteractiveAnswer(1, 100, "")
+			content := util.MarkdownTableWithTitle("当前最新投资者互动数据", datas.Results)
+			msg = append(msg, map[string]interface{}{
+				"role":    "user",
+				"content": "投资者互动数据",
+			})
+			msg = append(msg, map[string]interface{}{
+				"role":    "assistant",
+				"content": content,
+			})
+		}()
+
 		wg.Wait()
 
-		news := NewMarketNewsApi().GetNewsList("", 100)
+		news := NewMarketNewsApi().GetNewsList2("财联社电报", random.RandInt(100, 500))
 		messageText := strings.Builder{}
 		for _, telegraph := range *news {
 			messageText.WriteString("## " + telegraph.Time + ":" + "\n")
@@ -376,7 +501,7 @@ func (o OpenAi) NewSummaryStockNewsStream(userQuestion string, sysPromptId *int)
 	return ch
 }
 
-func (o OpenAi) NewChatStream(stock, stockCode, userQuestion string, sysPromptId *int, tools []Tool) <-chan map[string]any {
+func (o *OpenAi) NewChatStream(stock, stockCode, userQuestion string, sysPromptId *int, tools []Tool) <-chan map[string]any {
 	ch := make(chan map[string]any, 512)
 
 	defer func() {
@@ -459,16 +584,15 @@ func (o OpenAi) NewChatStream(stock, stockCode, userQuestion string, sysPromptId
 		logger.SugaredLogger.Infof("NewChatStream stock:%s stockCode:%s", stock, stockCode)
 		logger.SugaredLogger.Infof("Prompt：%s", sysPrompt)
 		logger.SugaredLogger.Infof("final question:%s", question)
-
 		wg := &sync.WaitGroup{}
-		wg.Add(7)
+		wg.Add(8)
 
 		go func() {
 			defer wg.Done()
 			var market strings.Builder
-			market.WriteString(getZSInfo("创业板指数", "sz399006", 30) + "\n")
-			market.WriteString(getZSInfo("上证综合指数", "sh000001", 30) + "\n")
-			market.WriteString(getZSInfo("沪深300指数", "sh000300", 30) + "\n")
+			market.WriteString(GetZSInfo("创业板指数", "sz399006", 30) + "\n")
+			market.WriteString(GetZSInfo("上证综合指数", "sh000001", 30) + "\n")
+			market.WriteString(GetZSInfo("沪深300指数", "sh000300", 30) + "\n")
 			//logger.SugaredLogger.Infof("NewChatStream getZSInfo=\n%s", market.String())
 			msg = append(msg, map[string]interface{}{
 				"role":    "user",
@@ -684,20 +808,39 @@ func (o OpenAi) NewChatStream(stock, stockCode, userQuestion string, sysPromptId
 				return
 			}
 
-			messages := SearchGuShiTongStockInfo(stockCode, o.CrawlTimeOut)
-			if messages == nil || len(*messages) == 0 {
-				logger.SugaredLogger.Error("获取股势通资讯失败")
-				//ch <- "***❗获取股势通资讯失败,分析结果可能不准确***<hr>"
-				//go runtime.EventsEmit(o.ctx, "warnMsg", "❗获取股势通资讯失败,分析结果可能不准确")
-				return
-			}
+			//messages := SearchGuShiTongStockInfo(stockCode, o.CrawlTimeOut)
+			//if messages == nil || len(*messages) == 0 {
+			//	logger.SugaredLogger.Error("获取股势通资讯失败")
+			//	//ch <- "***❗获取股势通资讯失败,分析结果可能不准确***<hr>"
+			//	//go runtime.EventsEmit(o.ctx, "warnMsg", "❗获取股势通资讯失败,分析结果可能不准确")
+			//	return
+			//}
+			//var newsText strings.Builder
+			//for _, message := range *messages {
+			//	newsText.WriteString(message + "\n")
+			//}
+			//msg = append(msg, map[string]interface{}{
+			//	"role":    "user",
+			//	"content": stock + "相关新闻资讯",
+			//})
+			//msg = append(msg, map[string]interface{}{
+			//	"role":    "assistant",
+			//	"content": newsText.String(),
+			//})
+		}()
+
+		go func() {
+			defer wg.Done()
+			resp := NewMarketNewsApi().TradingViewNews()
 			var newsText strings.Builder
-			for _, message := range *messages {
-				newsText.WriteString(message + "\n")
+
+			for _, a := range *resp {
+				logger.SugaredLogger.Debugf("value: %s", a.Title)
+				newsText.WriteString(a.Title + "\n")
 			}
 			msg = append(msg, map[string]interface{}{
 				"role":    "user",
-				"content": stock + "相关新闻资讯",
+				"content": "外媒全球新闻资讯",
 			})
 			msg = append(msg, map[string]interface{}{
 				"role":    "assistant",
@@ -722,7 +865,7 @@ func (o OpenAi) NewChatStream(stock, stockCode, userQuestion string, sysPromptId
 	return ch
 }
 
-func AskAi(o OpenAi, err error, messages []map[string]interface{}, ch chan map[string]any, question string) {
+func AskAi(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[string]any, question string) {
 	client := resty.New()
 	client.SetBaseURL(strutil.Trim(o.BaseUrl))
 	client.SetHeader("Authorization", "Bearer "+o.ApiKey)
@@ -863,7 +1006,7 @@ func AskAi(o OpenAi, err error, messages []map[string]interface{}, ch chan map[s
 
 	}
 }
-func AskAiWithTools(o OpenAi, err error, messages []map[string]interface{}, ch chan map[string]any, question string, tools []Tool) {
+func AskAiWithTools(o *OpenAi, err error, messages []map[string]interface{}, ch chan map[string]any, question string, tools []Tool) {
 	client := resty.New()
 	client.SetBaseURL(strutil.Trim(o.BaseUrl))
 	client.SetHeader("Authorization", "Bearer "+o.ApiKey)
@@ -1178,6 +1321,186 @@ func AskAiWithTools(o OpenAi, err error, messages []map[string]interface{}, ch c
 								}
 							}
 
+							if funcName == "InteractiveAnswer" {
+								page := gjson.Get(funcArguments, "page").String()
+								pageSize := gjson.Get(funcArguments, "pageSize").String()
+								keyWord := gjson.Get(funcArguments, "keyWord").String()
+								ch <- map[string]any{
+									"code":     1,
+									"question": question,
+									"chatId":   streamResponse.Id,
+									"model":    streamResponse.Model,
+									"content":  "\r\n```\r\n开始调用工具：InteractiveAnswer，\n参数：" + page + "," + pageSize + "," + keyWord + "\r\n```\r\n",
+									"time":     time.Now().Format(time.DateTime),
+								}
+								pageNo, err := convertor.ToInt(page)
+								if err != nil {
+									pageNo = 1
+								}
+								pageSizeNum, err := convertor.ToInt(pageSize)
+								if err != nil {
+									pageSizeNum = 50
+								}
+								datas := NewMarketNewsApi().InteractiveAnswer(int(pageNo), int(pageSizeNum), keyWord)
+								content := util.MarkdownTableWithTitle("投资互动数据", datas.Results)
+								logger.SugaredLogger.Infof("InteractiveAnswer=\n%s", content)
+								messages = append(messages, map[string]interface{}{
+									"role":    "assistant",
+									"content": currentAIContent.String(),
+									"tool_calls": []map[string]any{
+										{
+											"id":           currentCallId,
+											"tool_call_id": currentCallId,
+											"type":         "function",
+											"function": map[string]string{
+												"name":       funcName,
+												"arguments":  funcArguments,
+												"parameters": funcArguments,
+											},
+										},
+									},
+								})
+								messages = append(messages, map[string]interface{}{
+									"role":         "tool",
+									"content":      content,
+									"tool_call_id": currentCallId,
+								})
+							}
+							//
+							//if funcName == "QueryBKDictInfo" {
+							//	ch <- map[string]any{
+							//		"code":     1,
+							//		"question": question,
+							//		"chatId":   streamResponse.Id,
+							//		"model":    streamResponse.Model,
+							//		"content":  "\r\n```\r\n开始调用工具：QueryBKDictInfo，\n参数：" + funcArguments + "\r\n```\r\n",
+							//		"time":     time.Now().Format(time.DateTime),
+							//	}
+							//	res := NewMarketNewsApi().EMDictCode("016", freecache.NewCache(100))
+							//	bytes, err := json.Marshal(res)
+							//	if err != nil {
+							//		return
+							//	}
+							//	dict := &[]models.BKDict{}
+							//	json.Unmarshal(bytes, dict)
+							//	md := util.MarkdownTableWithTitle("行业/板块代码", dict)
+							//	logger.SugaredLogger.Infof("行业/板块代码=\n%s", md)
+							//	messages = append(messages, map[string]interface{}{
+							//		"role":    "assistant",
+							//		"content": currentAIContent.String(),
+							//		"tool_calls": []map[string]any{
+							//			{
+							//				"id":           currentCallId,
+							//				"tool_call_id": currentCallId,
+							//				"type":         "function",
+							//				"function": map[string]string{
+							//					"name":       funcName,
+							//					"arguments":  funcArguments,
+							//					"parameters": funcArguments,
+							//				},
+							//			},
+							//		},
+							//	})
+							//	messages = append(messages, map[string]interface{}{
+							//		"role":         "tool",
+							//		"content":      md,
+							//		"tool_call_id": currentCallId,
+							//	})
+							//}
+
+							//if funcName == "GetIndustryResearchReport" {
+							//	bkCode := gjson.Get(funcArguments, "bkCode").String()
+							//	ch <- map[string]any{
+							//		"code":     1,
+							//		"question": question,
+							//		"chatId":   streamResponse.Id,
+							//		"model":    streamResponse.Model,
+							//		"content":  "\r\n```\r\n开始调用工具：GetIndustryResearchReport，\n参数：" + bkCode + "\r\n```\r\n",
+							//		"time":     time.Now().Format(time.DateTime),
+							//	}
+							//	bkCode = strutil.ReplaceWithMap(bkCode, map[string]string{
+							//		"-":   "",
+							//		"_":   "",
+							//		"bk":  "",
+							//		"BK":  "",
+							//		"bk0": "",
+							//		"BK0": "",
+							//	})
+							//
+							//	logger.SugaredLogger.Debugf("code:%s", bkCode)
+							//	codeStr := convertor.ToString(bkCode)
+							//	res := NewMarketNewsApi().IndustryResearchReport(codeStr, 7)
+							//	md := strings.Builder{}
+							//	for _, a := range res {
+							//		d := a.(map[string]any)
+							//		md.WriteString(NewMarketNewsApi().GetIndustryReportInfo(d["infoCode"].(string)))
+							//	}
+							//	logger.SugaredLogger.Infof("bkCode:%s IndustryResearchReport:\n %s", bkCode, md.String())
+							//	messages = append(messages, map[string]interface{}{
+							//		"role":    "assistant",
+							//		"content": currentAIContent.String(),
+							//		"tool_calls": []map[string]any{
+							//			{
+							//				"id":           currentCallId,
+							//				"tool_call_id": currentCallId,
+							//				"type":         "function",
+							//				"function": map[string]string{
+							//					"name":       funcName,
+							//					"arguments":  funcArguments,
+							//					"parameters": funcArguments,
+							//				},
+							//			},
+							//		},
+							//	})
+							//	messages = append(messages, map[string]interface{}{
+							//		"role":         "tool",
+							//		"content":      md.String(),
+							//		"tool_call_id": currentCallId,
+							//	})
+							//}
+
+							if funcName == "GetStockResearchReport" {
+								stockCode := gjson.Get(funcArguments, "stockCode").String()
+								ch <- map[string]any{
+									"code":     1,
+									"question": question,
+									"chatId":   streamResponse.Id,
+									"model":    streamResponse.Model,
+									"content":  "\r\n```\r\n开始调用工具：GetStockResearchReport，\n参数：" + stockCode + "\r\n```\r\n",
+									"time":     time.Now().Format(time.DateTime),
+								}
+								res := NewMarketNewsApi().StockResearchReport(stockCode, 7)
+								md := strings.Builder{}
+								for _, a := range res {
+									logger.SugaredLogger.Debugf("value: %+v", a)
+									d := a.(map[string]any)
+									logger.SugaredLogger.Debugf("value: %s  infoCode:%s", d["title"], d["infoCode"])
+									md.WriteString(NewMarketNewsApi().GetIndustryReportInfo(d["infoCode"].(string)))
+								}
+								logger.SugaredLogger.Infof("stockCode:%s StockResearchReport:\n %s", stockCode, md.String())
+								messages = append(messages, map[string]interface{}{
+									"role":    "assistant",
+									"content": currentAIContent.String(),
+									"tool_calls": []map[string]any{
+										{
+											"id":           currentCallId,
+											"tool_call_id": currentCallId,
+											"type":         "function",
+											"function": map[string]string{
+												"name":       funcName,
+												"arguments":  funcArguments,
+												"parameters": funcArguments,
+											},
+										},
+									},
+								})
+								messages = append(messages, map[string]interface{}{
+									"role":         "tool",
+									"content":      md.String(),
+									"tool_call_id": currentCallId,
+								})
+							}
+
 						}
 						AskAiWithTools(o, err, messages, ch, question, tools)
 					}
@@ -1382,7 +1705,7 @@ func GetTelegraphList(crawlTimeOut int64) *[]string {
 	response, err := resty.New().SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
 		SetHeader("Referer", "https://www.cls.cn/").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
-		Get(fmt.Sprintf(url))
+		Get(url)
 	if err != nil {
 		return &[]string{}
 	}
@@ -1404,7 +1727,7 @@ func GetTopNewsList(crawlTimeOut int64) *[]string {
 	response, err := resty.New().SetTimeout(time.Duration(crawlTimeOut)*time.Second).R().
 		SetHeader("Referer", "https://www.cls.cn/").
 		SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.60").
-		Get(fmt.Sprintf(url))
+		Get(url)
 	if err != nil {
 		return &[]string{}
 	}
@@ -1421,7 +1744,7 @@ func GetTopNewsList(crawlTimeOut int64) *[]string {
 	return &telegraph
 }
 
-func (o OpenAi) SaveAIResponseResult(stockCode, stockName, result, chatId, question string) {
+func (o *OpenAi) SaveAIResponseResult(stockCode, stockName, result, chatId, question string) {
 	db.Dao.Create(&models.AIResponseResult{
 		StockCode: stockCode,
 		StockName: stockName,
@@ -1432,7 +1755,7 @@ func (o OpenAi) SaveAIResponseResult(stockCode, stockName, result, chatId, quest
 	})
 }
 
-func (o OpenAi) GetAIResponseResult(stock string) *models.AIResponseResult {
+func (o *OpenAi) GetAIResponseResult(stock string) *models.AIResponseResult {
 	var result models.AIResponseResult
 	db.Dao.Where("stock_code = ?", stock).Order("id desc").Limit(1).Find(&result)
 	return &result

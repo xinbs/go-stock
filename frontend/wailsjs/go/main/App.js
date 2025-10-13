@@ -22,12 +22,20 @@ export function AnalyzeSentiment(arg1) {
   return window['go']['main']['App']['AnalyzeSentiment'](arg1);
 }
 
+export function ChatWithAgent(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ChatWithAgent'](arg1, arg2, arg3);
+}
+
 export function CheckSponsorCode(arg1) {
   return window['go']['main']['App']['CheckSponsorCode'](arg1);
 }
 
-export function CheckUpdate() {
-  return window['go']['main']['App']['CheckUpdate']();
+export function CheckStockBaseInfo(arg1) {
+  return window['go']['main']['App']['CheckStockBaseInfo'](arg1);
+}
+
+export function CheckUpdate(arg1) {
+  return window['go']['main']['App']['CheckUpdate'](arg1);
 }
 
 export function ClsCalendar() {
@@ -56,6 +64,10 @@ export function FollowFund(arg1) {
 
 export function GetAIResponseResult(arg1) {
   return window['go']['main']['App']['GetAIResponseResult'](arg1);
+}
+
+export function GetAiConfigs() {
+  return window['go']['main']['App']['GetAiConfigs']();
 }
 
 export function GetConfig() {
@@ -158,6 +170,10 @@ export function IndustryResearchReport(arg1) {
   return window['go']['main']['App']['IndustryResearchReport'](arg1);
 }
 
+export function InitializeGroupSort() {
+  return window['go']['main']['App']['InitializeGroupSort']();
+}
+
 export function InvestCalendarTimeLine(arg1) {
   return window['go']['main']['App']['InvestCalendarTimeLine'](arg1);
 }
@@ -166,8 +182,8 @@ export function LongTigerRank(arg1) {
   return window['go']['main']['App']['LongTigerRank'](arg1);
 }
 
-export function NewChatStream(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['NewChatStream'](arg1, arg2, arg3, arg4, arg5);
+export function NewChatStream(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['NewChatStream'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function NewsPush(arg1) {
@@ -190,8 +206,8 @@ export function RemoveStockGroup(arg1, arg2, arg3) {
   return window['go']['main']['App']['RemoveStockGroup'](arg1, arg2, arg3);
 }
 
-export function SaveAIResponseResult(arg1, arg2, arg3, arg4, arg5) {
-  return window['go']['main']['App']['SaveAIResponseResult'](arg1, arg2, arg3, arg4, arg5);
+export function SaveAIResponseResult(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['SaveAIResponseResult'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
 export function SaveAsMarkdown(arg1, arg2) {
@@ -246,8 +262,8 @@ export function StockResearchReport(arg1) {
   return window['go']['main']['App']['StockResearchReport'](arg1);
 }
 
-export function SummaryStockNews(arg1, arg2, arg3) {
-  return window['go']['main']['App']['SummaryStockNews'](arg1, arg2, arg3);
+export function SummaryStockNews(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SummaryStockNews'](arg1, arg2, arg3, arg4);
 }
 
 export function UnFollow(arg1) {
@@ -260,4 +276,8 @@ export function UnFollowFund(arg1) {
 
 export function UpdateConfig(arg1) {
   return window['go']['main']['App']['UpdateConfig'](arg1);
+}
+
+export function UpdateGroupSort(arg1, arg2) {
+  return window['go']['main']['App']['UpdateGroupSort'](arg1, arg2);
 }

@@ -5,15 +5,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"github.com/duke-git/lancet/v2/slice"
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/logger"
-	"github.com/wailsapp/wails/v2/pkg/menu"
-	"github.com/wailsapp/wails/v2/pkg/menu/keys"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/mac"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go-stock/backend/data"
 	"go-stock/backend/db"
 	log "go-stock/backend/logger"
@@ -21,6 +12,15 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
+
+	"github.com/duke-git/lancet/v2/slice"
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/logger"
+	"github.com/wailsapp/wails/v2/pkg/menu"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed frontend/dist
@@ -70,14 +70,16 @@ func main() {
 	// Create an instance of the app structure
 	app := NewApp()
 	AppMenu := menu.NewMenu()
-	AppMenu.Append(menu.EditMenu())
-	FileMenu := AppMenu.AddSubmenu("设置")
-	FileMenu.AddText("窗口全屏", keys.CmdOrCtrl("f"), func(callback *menu.CallbackData) {
-		runtime.WindowFullscreen(app.ctx)
-	})
-	FileMenu.AddText("窗口还原", keys.Key("Esc"), func(callback *menu.CallbackData) {
-		runtime.WindowUnfullscreen(app.ctx)
-	})
+	if IsMacOS() {
+		AppMenu.Append(menu.EditMenu())
+	}
+	//FileMenu := AppMenu.AddSubmenu("设置")
+	//FileMenu.AddText("窗口全屏", keys.CmdOrCtrl("f"), func(callback *menu.CallbackData) {
+	//	runtime.WindowFullscreen(app.ctx)
+	//})
+	//FileMenu.AddText("窗口还原", keys.Key("Esc"), func(callback *menu.CallbackData) {
+	//	runtime.WindowUnfullscreen(app.ctx)
+	//})
 	//FileMenu.AddText("显示搜索框", keys.CmdOrCtrl("s"), func(callbackData *menu.CallbackData) {
 	//	runtime.EventsEmit(app.ctx, "showSearch", 1)
 	//})
@@ -112,26 +114,26 @@ func main() {
 		//height = 768
 	}
 
-	darkTheme := data.NewSettingsApi(&data.Settings{}).GetConfig().DarkTheme
+	darkTheme := data.GetSettingConfig().DarkTheme
 	backgroundColour := &options.RGBA{R: 255, G: 255, B: 255, A: 1}
 	if darkTheme {
 		backgroundColour = &options.RGBA{R: 27, G: 38, B: 54, A: 1}
 	}
 
-	frameless := getFrameless()
+	//frameless := getFrameless()
 
 	// Create application with options
 	err = wails.Run(&options.App{
-		Title:     "go-stock",
+		Title:     "go-stock：AI赋能股票分析✨",
 		Width:     width * 4 / 5,
-		Height:    900,
+		Height:    920,
 		MinWidth:  minWidth,
 		MinHeight: minHeight,
 		//MaxWidth:                 width,
 		//MaxHeight:                height,
 		DisableResize:            false,
 		Fullscreen:               false,
-		Frameless:                frameless,
+		Frameless:                false,
 		StartHidden:              false,
 		HideWindowOnClose:        false,
 		EnableDefaultContextMenu: true,
@@ -147,7 +149,7 @@ func main() {
 		OnShutdown:               app.shutdown,
 		WindowStartState:         options.Normal,
 		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId:               "go-stock",
+			UniqueId:               "go-stock-dev",
 			OnSecondInstanceLaunch: OnSecondInstanceLaunch,
 		},
 		Bind: []interface{}{
@@ -187,6 +189,26 @@ func main() {
 
 }
 
+func updateMultipleModel() {
+	oldSettings := &models.OldSettings{}
+	db.Dao.Model(oldSettings).First(oldSettings)
+	aiConfig := &data.AIConfig{}
+	db.Dao.Model(aiConfig).First(aiConfig)
+	if oldSettings.OpenAiEnable && oldSettings.OpenAiApiKey != "" && aiConfig.ID == 0 {
+		aiConfig.Name = oldSettings.OpenAiModelName
+		aiConfig.ApiKey = oldSettings.OpenAiApiKey
+		aiConfig.BaseUrl = oldSettings.OpenAiBaseUrl
+		aiConfig.ModelName = oldSettings.OpenAiModelName
+		aiConfig.Temperature = oldSettings.OpenAiTemperature
+		aiConfig.MaxTokens = oldSettings.OpenAiMaxTokens
+		aiConfig.TimeOut = oldSettings.OpenAiApiTimeOut
+		err := db.Dao.Model(aiConfig).Create(aiConfig).Error
+		if err != nil {
+			log.SugaredLogger.Error(err.Error())
+		}
+	}
+}
+
 func AutoMigrate() {
 	db.Dao.AutoMigrate(&data.StockInfo{})
 	db.Dao.AutoMigrate(&data.StockBasic{})
@@ -205,6 +227,10 @@ func AutoMigrate() {
 	db.Dao.AutoMigrate(&models.Telegraph{})
 	db.Dao.AutoMigrate(&models.TelegraphTags{})
 	db.Dao.AutoMigrate(&models.LongTigerRankData{})
+	db.Dao.AutoMigrate(&data.AIConfig{})
+	db.Dao.AutoMigrate(&models.BKDict{})
+
+	updateMultipleModel()
 }
 
 func initStockDataUS(ctx context.Context) {
@@ -261,7 +287,7 @@ func initStockDataHK(ctx context.Context) {
 }
 
 func updateBasicInfo() {
-	config := data.NewSettingsApi(&data.Settings{}).GetConfig()
+	config := data.GetSettingConfig()
 	if config.UpdateBasicInfoOnStart {
 		//更新基本信息
 		go data.NewStockDataApi().GetStockBaseInfo()
