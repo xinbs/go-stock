@@ -222,7 +222,7 @@ func (a *App) CheckUpdate(flag int) {
 		logger.SugaredLogger.Info("自动更新已禁用")
 		return
 	}
-	
+
 	sponsorCode := strutil.Trim(config.SponsorCode)
 	if sponsorCode != "" {
 		encrypted, err := hex.DecodeString(sponsorCode)
